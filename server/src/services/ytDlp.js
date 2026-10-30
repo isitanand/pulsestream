@@ -338,6 +338,9 @@ function startDownload(jobId, url, formatId, type) {
   if (isYouTube && !cookiesFlag) {
     args.push('--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs');
   }
+  if (cookiesPath && fs.existsSync(cookiesPath)) {
+    args.push('--cookies', cookiesPath);
+  }
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);
   }
@@ -347,7 +350,7 @@ function startDownload(jobId, url, formatId, type) {
     if (formatId.startsWith('mp3-')) {
       const bitrate = formatId.split('-')[1]; // '320k' or '192k'
       args.push(
-        '-f', 'bestaudio',
+        '-f', 'ba/b/best',
         '-x',
         '--audio-format', 'mp3',
         '--audio-quality', bitrate,
@@ -356,19 +359,27 @@ function startDownload(jobId, url, formatId, type) {
       );
     } else {
       args.push(
-        '-f', formatId,
+        '-f', `${formatId}/ba/b/best`,
         '-o', outputTemplate,
         url
       );
     }
   } else {
-    // Video type: high-resolution formats require audio merging with graceful fallback.
-    args.push(
-      '-f', `${formatId}+bestaudio/best/${formatId}/bestvideo+bestaudio/best`,
-      '--merge-output-format', 'mp4',
-      '-o', outputTemplate,
-      url
-    );
+    // Video type: on cloud datacenters without cookies, stream pre-merged format to prevent bot checks
+    if (isYouTube && !cookiesFlag) {
+      args.push(
+        '-f', `${formatId}/b/best`,
+        '-o', outputTemplate,
+        url
+      );
+    } else {
+      args.push(
+        '-f', `${formatId}+bestaudio/best`,
+        '--merge-output-format', 'mp4',
+        '-o', outputTemplate,
+        url
+      );
+    }
   }
 
   // Spawn yt-dlp process across Windows and Linux

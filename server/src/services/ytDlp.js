@@ -47,9 +47,17 @@ function getYtDlpCommand() {
   return 'yt-dlp';
 }
 
-// Path to cookies file (written from YOUTUBE_COOKIES env var at server startup if present)
-const cookiesPath = path.resolve(__dirname, '../../cookies.txt');
-const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+/**
+ * Find cookies file dynamically from multiple candidate paths.
+ */
+function getCookiesPath() {
+  const candidateCookies = [
+    path.resolve(__dirname, '../../cookies.txt'),
+    path.resolve(process.cwd(), 'cookies.txt'),
+    path.resolve(process.cwd(), 'server/cookies.txt')
+  ];
+  return candidateCookies.find(p => fs.existsSync(p) && fs.statSync(p).size > 10) || null;
+}
 
 function runYtDlpMetadata(url, extraArgs = [], useCookies = true) {
   return new Promise((resolve, reject) => {
@@ -71,9 +79,10 @@ function runYtDlpMetadata(url, extraArgs = [], useCookies = true) {
     }
 
     const args = [...baseArgs];
+    const cookiesFile = getCookiesPath();
 
-    if (useCookies && cookiesPath && fs.existsSync(cookiesPath)) {
-      args.push('--cookies', cookiesPath);
+    if (useCookies && cookiesFile) {
+      args.push('--cookies', cookiesFile);
     }
 
     if (extraArgs && extraArgs.length > 0) {
@@ -112,23 +121,42 @@ async function getMetadata(url) {
   }
 
   const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
+  const cookiesFile = getCookiesPath();
 
-  // Strategy 1: Always try Android Innertube bypass first WITHOUT cookies (immune to 429 and expired cookies)
   if (isYouTube) {
+    // Strategy 1: If cookies exist, pass cookies AND player_skip to prevent 429
+    if (cookiesFile) {
+      try {
+        console.log('Attempting YouTube extraction with cookies + webpage skip...');
+        return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_skip=webpage,configs'], true);
+      } catch (errCookies) {
+        console.warn('YouTube extraction with cookies failed, falling back to android bypass:', errCookies.stderr || errCookies.message);
+      }
+    }
+
+    // Strategy 2: Android Innertube bypass (works without cookies on residential and supports direct streams)
     try {
-      console.log('Attempting YouTube extraction via Android Innertube bypass (immune to cookie expiration)...');
+      console.log('Attempting YouTube extraction via Android Innertube bypass...');
       return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs'], false);
-    } catch (err1) {
-      console.warn('Android bypass without cookies failed, falling back:', err1.stderr || err1.message);
+    } catch (errAndroid) {
+      console.warn('Android bypass failed, falling back to web_embedded:', errAndroid.stderr || errAndroid.message);
+    }
+
+    // Strategy 3: Web-embedded client bypass
+    try {
+      console.log('Attempting YouTube extraction via web_embedded...');
+      return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=web_embedded;player_skip=webpage,configs'], false);
+    } catch (errEmbedded) {
+      console.warn('Web embedded bypass failed:', errEmbedded.stderr || errEmbedded.message);
     }
   }
 
-  // Strategy 2: Standard/authenticated extraction with cookies if available
+  // Strategy for all other supported platforms (SoundCloud, Vimeo, TikTok, Twitter/X, Instagram, etc.)
   try {
     return await runYtDlpMetadata(url, [], true);
-  } catch (err2) {
-    const stderr = err2.stderr || '';
-    console.error('Standard extraction error:', stderr);
+  } catch (errFinal) {
+    const stderr = errFinal.stderr || '';
+    console.error('Extraction error:', stderr);
 
     let errorCode = ERROR_CODES.METADATA_FAILED;
     let errorMessage = 'Failed to extract metadata from the provided URL';
@@ -137,7 +165,7 @@ async function getMetadata(url) {
       errorCode = ERROR_CODES.UNSUPPORTED_SITE;
       errorMessage = 'The provided website or URL is not supported by the downloader';
     } else if (stderr.includes('Sign in to confirm your age') || stderr.includes('Sign in to confirm you’re not a bot')) {
-      errorMessage = 'This video requires authentication or is restricted by the platform';
+      errorMessage = 'This video requires authentication or is restricted by the platform. Please verify your YouTube cookies configuration on Render.';
     }
 
     throw { code: errorCode, message: errorMessage, details: stderr };
@@ -325,12 +353,16 @@ function startDownload(jobId, url, formatId, type) {
 
   args.push('--newline');
   const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
-  if (isYouTube && !cookiesFlag) {
-    args.push('--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs');
+  const cookiesFile = getCookiesPath();
+
+  if (cookiesFile) {
+    args.push('--cookies', cookiesFile);
   }
-  if (!isYouTube && cookiesPath && fs.existsSync(cookiesPath)) {
-    args.push('--cookies', cookiesPath);
+
+  if (isYouTube) {
+    args.push('--extractor-args', 'youtube:player_skip=webpage,configs');
   }
+
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);
   }
@@ -355,8 +387,8 @@ function startDownload(jobId, url, formatId, type) {
       );
     }
   } else {
-    // Video type: on cloud datacenters, stream format without separate web audio to prevent bot checks
-    if (isYouTube) {
+    // Video type: mux format with audio fallback
+    if (isYouTube && !cookiesFile) {
       args.push(
         '-f', `${formatId}/b/best`,
         '-o', outputTemplate,

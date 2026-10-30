@@ -47,10 +47,12 @@ router.get('/diag', async (req, res) => {
 
     execFile(command, testArgs, { maxBuffer: 25 * 1024 * 1024, env }, (err, stdout, stderr) => {
       let parsedTitle = null;
+      let formatCount = 0;
       if (stdout) {
         try {
           const json = JSON.parse(stdout);
           parsedTitle = json.title;
+          formatCount = json.formats ? json.formats.length : 0;
         } catch (e) {}
       }
       res.json({
@@ -60,47 +62,9 @@ router.get('/diag', async (req, res) => {
         cookiesLength,
         testArgs,
         parsedTitle,
+        formatCount,
         error: err ? err.message : null,
         stderr: stderr ? stderr.substring(0, 500) : null
-      });
-    });
-    return;
-
-    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
-    const env = { ...process.env, PATH: fullPath };
-
-    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
-    const env = { ...process.env, PATH: fullPath };
-
-    execFile(command, testArgs, { maxBuffer: 25 * 1024 * 1024, env }, (err, stdout, stderr) => {
-      let parsed = null;
-      let parseErr = null;
-      if (stdout) {
-        try {
-          const json = JSON.parse(stdout);
-          parsed = {
-            id: json.id,
-            title: json.title,
-            uploader: json.uploader,
-            formatCount: json.formats?.length,
-            formats: json.formats?.map(f => ({ id: f.format_id, height: f.height, ext: f.ext, vcodec: f.vcodec }))
-          };
-        } catch (e) {
-          parseErr = e.message;
-        }
-      }
-
-      res.json({
-        platform: process.platform,
-        command,
-        binPath,
-        binFiles,
-        error: err ? err.message : null,
-        code: err ? err.code : 0,
-        stderr: stderr ? stderr.substring(0, 1000) : null,
-        stdoutLength: stdout ? stdout.length : 0,
-        parseErr,
-        parsed
       });
     });
   } catch (e) {

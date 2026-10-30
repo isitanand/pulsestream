@@ -8,68 +8,8 @@ router.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok', 
     uptime: process.uptime(), 
-    timestamp: Date.now(),
-    version: '1.2.1',
-    commit: 'diag-check'
+    timestamp: Date.now() 
   });
-});
-
-// Diagnostic endpoint to inspect Render runtime environment and yt-dlp execution
-router.get('/diag', async (req, res) => {
-  try {
-    const fs = require('fs');
-    const path = require('path');
-    const { execFile } = require('child_process');
-    const candidateBins = [
-      path.resolve(__dirname, '../../bin'),
-      path.resolve(process.cwd(), 'bin'),
-      path.resolve(process.cwd(), 'server/bin')
-    ];
-    const binPath = candidateBins.find(p => fs.existsSync(p)) || candidateBins[0];
-    const binFiles = fs.existsSync(binPath) ? fs.readdirSync(binPath) : [];
-    const localBinary = path.join(binPath, 'yt-dlp');
-    const command = fs.existsSync(localBinary) ? localBinary : 'yt-dlp';
-
-    const serverDir = path.resolve(__dirname, '../..');
-    const serverFiles = fs.existsSync(serverDir) ? fs.readdirSync(serverDir) : [];
-    const hasCookies = serverFiles.includes('cookies.txt');
-    let cookiesLength = 0;
-    if (hasCookies) {
-      try { cookiesLength = fs.readFileSync(path.join(serverDir, 'cookies.txt'), 'utf8').length; } catch (e) {}
-    }
-
-    const cookiesFile = path.join(serverDir, 'cookies.txt');
-    const cookieArgs = fs.existsSync(cookiesFile) ? ['--cookies', cookiesFile] : [];
-    const testArgs = [...cookieArgs, '--dump-json', '--no-playlist', 'https://youtu.be/zZcV9kDMQzI?si=iHU3etTbcGHSWXUR'];
-
-    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
-    const env = { ...process.env, PATH: fullPath };
-
-    execFile(command, testArgs, { maxBuffer: 25 * 1024 * 1024, env }, (err, stdout, stderr) => {
-      let parsedTitle = null;
-      let formatCount = 0;
-      if (stdout) {
-        try {
-          const json = JSON.parse(stdout);
-          parsedTitle = json.title;
-          formatCount = json.formats ? json.formats.length : 0;
-        } catch (e) {}
-      }
-      res.json({
-        platform: process.platform,
-        command,
-        hasCookies: fs.existsSync(cookiesFile),
-        cookiesLength,
-        testArgs,
-        parsedTitle,
-        formatCount,
-        error: err ? err.message : null,
-        stderr: stderr ? stderr.substring(0, 500) : null
-      });
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message, stack: e.stack });
-  }
 });
 
 // Apply rate limiter to all routes

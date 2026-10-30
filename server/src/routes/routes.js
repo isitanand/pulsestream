@@ -5,10 +5,10 @@ const { validateUrl, rateLimiter } = require('../middleware/security');
 
 // Health check endpoint (exempt from rate limiting for keep-alive pings)
 router.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
-    uptime: process.uptime(), 
-    timestamp: Date.now() 
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: Date.now()
   });
 });
 

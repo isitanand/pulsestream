@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   ChevronDown, Menu, X, Shield, Sparkles, Zap, 
-  HardDrive, History, User, Sun, Moon 
+  HardDrive, History, User, Sun, Moon, Sliders 
 } from 'lucide-react';
 import HeroDownloader from './HeroDownloader';
 
@@ -10,6 +10,7 @@ export default function HeroSection({
   showNotification, 
   preferences, 
   onOpenHistory, 
+  onOpenSettings,
   onOpenDevInfo,
   theme,
   toggleTheme 
@@ -131,7 +132,7 @@ export default function HeroSection({
         </nav>
 
         {/* Right: Desktop Action Buttons + Theme Toggle */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden md:flex items-center gap-2.5">
           {/* Light / Dark Mode Toggle */}
           <button
             type="button"
@@ -155,9 +156,24 @@ export default function HeroSection({
                 ? 'bg-white hover:bg-neutral-50 text-[#171228] border-neutral-300 shadow-sm' 
                 : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
             }`}
+            title="Download History"
           >
             <History size={15} />
             <span>History</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={onOpenSettings}
+            className={`rounded-[8px] font-['Manrope'] font-semibold text-[14px] px-3.5 py-2 transition-all cursor-pointer flex items-center gap-1.5 border ${
+              isLight 
+                ? 'bg-white hover:bg-neutral-50 text-[#171228] border-neutral-300 shadow-sm' 
+                : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+            }`}
+            title="Stream Engine Settings"
+          >
+            <Sliders size={15} />
+            <span>Settings</span>
           </button>
 
           <button 
@@ -248,19 +264,31 @@ export default function HeroSection({
           <div className="flex flex-col gap-3 pt-6 border-t border-neutral-200/20">
             <button 
               type="button"
-              onClick={() => { setMobileMenuOpen(false); onOpenHistory(); }}
-              className={`w-full rounded-[8px] font-['Manrope'] font-semibold text-[15px] py-3 text-center border ${
+              onClick={() => { setMobileMenuOpen(false); onOpenSettings(); }}
+              className={`w-full rounded-[8px] font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
                 isLight ? 'bg-neutral-100 text-neutral-800 border-neutral-300' : 'bg-white/10 text-white border-white/20'
               }`}
             >
-              Download History
+              <Sliders size={16} />
+              <span>Stream Settings</span>
+            </button>
+            <button 
+              type="button"
+              onClick={() => { setMobileMenuOpen(false); onOpenHistory(); }}
+              className={`w-full rounded-[8px] font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
+                isLight ? 'bg-neutral-100 text-neutral-800 border-neutral-300' : 'bg-white/10 text-white border-white/20'
+              }`}
+            >
+              <History size={16} />
+              <span>Download History</span>
             </button>
             <button 
               type="button"
               onClick={() => { setMobileMenuOpen(false); onOpenDevInfo(); }}
-              className="w-full bg-[#7b39fc] rounded-[8px] text-[#fafafa] font-['Manrope'] font-semibold text-[15px] py-3 text-center shadow-lg shadow-[#7b39fc]/30"
+              className="w-full bg-[#7b39fc] rounded-[8px] text-[#fafafa] font-['Manrope'] font-semibold text-[15px] py-3 text-center shadow-lg shadow-[#7b39fc]/30 flex items-center justify-center gap-2"
             >
-              Developer Profile
+              <User size={16} />
+              <span>Developer Profile</span>
             </button>
           </div>
         </div>
@@ -303,6 +331,7 @@ export default function HeroSection({
           addHistory={addHistory}
           showNotification={showNotification}
           preferences={preferences}
+          onOpenSettings={onOpenSettings}
           theme={theme}
         />
 

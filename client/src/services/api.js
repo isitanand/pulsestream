@@ -66,3 +66,7 @@ export async function cancelDownload(jobId) {
 export function getDownloadFileUrl(jobId) {
   return `${API_BASE}/download/file/${jobId}`;
 }
+
+// Aliases for seamless component compatibility
+export const getDownloadStatus = getJobStatus;
+export const getFileDownloadUrl = getDownloadFileUrl;

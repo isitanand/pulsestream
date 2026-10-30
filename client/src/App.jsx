@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import HeroSection from './components/HeroSection';
 import FeaturesSection from './components/FeaturesSection';
 import DeveloperModal from './components/DeveloperModal';
+import SettingsModal from './components/SettingsModal';
 import { 
   X, History, Trash2, CheckCircle, 
   AlertTriangle, Info
@@ -13,6 +14,7 @@ export default function App() {
   });
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDevInfoOpen, setIsDevInfoOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
 
@@ -89,6 +91,7 @@ export default function App() {
         showNotification={showNotification}
         preferences={preferences}
         onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenDevInfo={() => setIsDevInfoOpen(true)}
         theme={theme}
         toggleTheme={toggleTheme}
@@ -97,14 +100,24 @@ export default function App() {
       {/* 2. Features, Supported Sites & Modern Footer */}
       <FeaturesSection theme={theme} />
 
-      {/* 3. Redesigned Developer Modal (Anand Choubey) */}
+      {/* 3. Settings & Preferences Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        preferences={preferences}
+        onSavePreferences={setPreferences}
+        showNotification={showNotification}
+        theme={theme}
+      />
+
+      {/* 4. Redesigned Developer Modal (Anand Choubey) */}
       <DeveloperModal 
         isOpen={isDevInfoOpen}
         onClose={() => setIsDevInfoOpen(false)}
         theme={theme}
       />
 
-      {/* 4. History Modal */}
+      {/* 5. History Modal */}
       {isHistoryOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"

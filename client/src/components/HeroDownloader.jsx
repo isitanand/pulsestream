@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Film, Music, Download, AlertTriangle, 
   RefreshCw, CheckCircle, X, Shield, Clock,
-  HardDrive, ArrowRight, Sparkles, Clipboard
+  HardDrive, ArrowRight, Sparkles, Clipboard, Sliders
 } from 'lucide-react';
 import * as api from '../services/api';
 import constants from '../../../shared/constants/constants.json';
@@ -25,7 +25,13 @@ const formatSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 };
 
-export default function HeroDownloader({ addHistory, showNotification, preferences, theme }) {
+export default function HeroDownloader({ 
+  addHistory, 
+  showNotification, 
+  preferences, 
+  onOpenSettings,
+  theme 
+}) {
   const [url, setUrl] = useState('');
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [metadata, setMetadata] = useState(null);
@@ -42,38 +48,34 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
     };
   }, []);
 
-  const handlePasteClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setUrl(text);
-        showNotification('Pasted link from clipboard!', 'info');
-      }
-    } catch {
-      showNotification('Could not read clipboard. Please paste manually.', 'warning');
-    }
-  };
-
-  const handleFetchMetadata = async (e) => {
+  const handleFetchMetadata = async (e, urlOverride = null) => {
     if (e) e.preventDefault();
-    if (!url.trim()) return;
+    const targetUrl = (urlOverride || url).trim();
+    if (!targetUrl) return;
 
     setLoadingMetadata(true);
     setMetadata(null);
     setSelectedFormat(null);
 
     try {
-      const data = await api.getMetadata(url);
+      const data = await api.getMetadata(targetUrl);
       setMetadata(data);
       
       const defaultType = preferences?.defaultFormat || 'video';
       setActiveTab(defaultType);
       
-      const formatsList = defaultType === 'video' ? data.formats.video : data.formats.audio;
+      const formatsList = defaultType === 'video' ? data.formats?.video : data.formats?.audio;
       if (formatsList && formatsList.length > 0) {
         let selected = formatsList[0];
         if (defaultType === 'video' && preferences?.defaultQuality) {
-          const match = formatsList.find(f => f.resolution.includes(preferences.defaultQuality));
+          if (preferences.defaultQuality === 'best') {
+            selected = formatsList[0];
+          } else {
+            const match = formatsList.find(f => f.resolution?.includes(preferences.defaultQuality));
+            if (match) selected = match;
+          }
+        } else if (defaultType === 'audio' && preferences?.audioQuality) {
+          const match = formatsList.find(f => f.note?.includes(preferences.audioQuality) || f.resolution?.includes(preferences.audioQuality));
           if (match) selected = match;
         }
         setSelectedFormat(selected);
@@ -84,6 +86,21 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
       showNotification(err.message || 'Failed to analyze link', 'error');
     } finally {
       setLoadingMetadata(false);
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setUrl(text);
+        showNotification('Pasted link from clipboard!', 'info');
+        if (preferences?.autoAnalyze && (text.startsWith('http://') || text.startsWith('https://'))) {
+          handleFetchMetadata(null, text);
+        }
+      }
+    } catch {
+      showNotification('Could not read clipboard. Please paste manually.', 'warning');
     }
   };
 
@@ -108,51 +125,49 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
         totalSize: selectedFormat.size ? formatSize(selectedFormat.size) : 'Unknown',
         title: metadata.title,
         thumbnail: metadata.thumbnail,
-        formatNote: selectedFormat.note,
-        ext: selectedFormat.ext
+        filename: jobData.filename
       };
 
       setActiveJob(initialJobState);
-      startPolling(jobData.jobId);
+
+      // Start Polling Status
+      pollJobStatus(jobData.jobId, metadata.title);
     } catch (err) {
       console.error(err);
-      showNotification(err.message || 'Failed to start download process', 'error');
+      showNotification(err.message || 'Failed to start download job', 'error');
     }
   };
 
-  const startPolling = (jobId) => {
+  const pollJobStatus = (jobId, title) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
 
     pollingRef.current = setInterval(async () => {
       try {
-        const statusData = await api.getJobStatus(jobId);
-        
+        const statusData = await api.getDownloadStatus(jobId);
+
         setActiveJob(prev => ({
           ...prev,
           status: statusData.status,
-          progress: statusData.progress,
-          speed: statusData.speed,
-          eta: statusData.eta,
-          totalSize: statusData.totalSize !== 'Unknown' ? statusData.totalSize : prev?.totalSize,
-          fileName: statusData.fileName || prev?.fileName
+          progress: statusData.progress || prev?.progress || 0,
+          speed: statusData.speed || prev?.speed || 'Connecting...',
+          eta: statusData.eta || prev?.eta || '--:--',
+          filename: statusData.filename || prev?.filename
         }));
 
         if (statusData.status === JOB_STATUS.COMPLETED) {
           clearInterval(pollingRef.current);
-          showNotification('Media download ready!', 'success');
-          
-          if (addHistory) {
-            addHistory({
-              title: statusData.fileName || activeJob?.title || metadata?.title,
-              url: metadata?.url,
-              type: activeTab,
-              format: selectedFormat?.note || activeJob?.formatNote,
-              size: statusData.totalSize !== 'Unknown' ? statusData.totalSize : formatSize(selectedFormat?.size)
-            });
-          }
+          showNotification('Media ready for direct download!', 'success');
+
+          addHistory({
+            title: title,
+            url: metadata?.url,
+            format: activeTab.toUpperCase(),
+            quality: selectedFormat?.resolution || selectedFormat?.note || 'Best',
+            size: selectedFormat?.size ? formatSize(selectedFormat.size) : 'Unknown'
+          });
         } else if (statusData.status === JOB_STATUS.FAILED) {
           clearInterval(pollingRef.current);
-          showNotification(statusData.error || 'Server processing failed', 'error');
+          showNotification(statusData.error || 'Stream processing failed', 'error');
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -166,26 +181,30 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
       if (pollingRef.current) clearInterval(pollingRef.current);
       await api.cancelDownload(activeJob.jobId);
       setActiveJob(null);
-      showNotification('Download cancelled', 'info');
+      showNotification('Download job cancelled', 'info');
     } catch (err) {
       console.error(err);
-      showNotification('Could not cancel download on server', 'error');
+      setActiveJob(null);
     }
   };
 
   const triggerFileDownload = () => {
     if (!activeJob || activeJob.status !== JOB_STATUS.COMPLETED) return;
-    const downloadUrl = api.getDownloadFileUrl(activeJob.jobId);
-    window.location.href = downloadUrl;
-    setTimeout(() => {
-      setActiveJob(null);
-    }, 2500);
+    const downloadUrl = api.getFileDownloadUrl(activeJob.jobId);
+    
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = activeJob.filename || 'media';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    showNotification('Download started!', 'success');
   };
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    if (!metadata) return;
-    const formatsList = tab === 'video' ? metadata.formats.video : metadata.formats.audio;
+    const formatsList = tab === 'video' ? metadata?.formats?.video : metadata?.formats?.audio;
     if (formatsList && formatsList.length > 0) {
       setSelectedFormat(formatsList[0]);
     } else {
@@ -197,7 +216,7 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
     <div className="w-full max-w-3xl mx-auto mt-8 sm:mt-10 px-2 sm:px-0">
       {/* 1. Main Glassmorphic Input Bar */}
       <form 
-        onSubmit={handleFetchMetadata}
+        onSubmit={(e) => handleFetchMetadata(e)}
         className={`relative flex flex-col sm:flex-row items-center gap-2 p-2 rounded-[16px] backdrop-blur-xl border shadow-2xl transition-all focus-within:border-[#7b39fc] focus-within:ring-2 focus-within:ring-[#7b39fc]/30 ${
           isLight
             ? 'bg-white/90 border-purple-200 shadow-purple-900/10'
@@ -226,21 +245,38 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
               <X size={16} />
             </button>
           )}
-          {!url && (
-            <button
-              type="button"
-              onClick={handlePasteClipboard}
-              className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-[8px] transition-colors cursor-pointer ${
-                isLight 
-                  ? 'text-neutral-500 hover:text-neutral-800 bg-neutral-100 hover:bg-neutral-200' 
-                  : 'text-white/50 hover:text-white bg-white/5 hover:bg-white/10'
-              }`}
-              title="Paste from clipboard"
-            >
-              <Clipboard size={13} />
-              <span>Paste</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {!url && (
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                className={`hidden sm:flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-[8px] transition-colors cursor-pointer ${
+                  isLight 
+                    ? 'text-neutral-500 hover:text-neutral-800 bg-neutral-100 hover:bg-neutral-200' 
+                    : 'text-white/50 hover:text-white bg-white/5 hover:bg-white/10'
+                }`}
+                title="Paste from clipboard"
+              >
+                <Clipboard size={13} />
+                <span>Paste</span>
+              </button>
+            )}
+            {onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-[8px] transition-colors cursor-pointer ${
+                  isLight 
+                    ? 'text-neutral-500 hover:text-neutral-800 bg-neutral-100 hover:bg-neutral-200' 
+                    : 'text-white/50 hover:text-white bg-white/5 hover:bg-white/10'
+                }`}
+                title="Configure Stream Settings & Preferences"
+              >
+                <Sliders size={13} />
+                <span className="hidden sm:inline">Settings</span>
+              </button>
+            )}
+          </div>
         </div>
 
         <button
@@ -293,36 +329,52 @@ export default function HeroDownloader({ addHistory, showNotification, preferenc
                 <span>{metadata.extractor}</span>
               </p>
 
-              {/* Format Tabs (Video vs Audio) */}
-              <div className={`flex items-center gap-2 mt-4 border-b pb-3 ${isLight ? 'border-neutral-200' : 'border-white/10'}`}>
-                <button
-                  type="button"
-                  onClick={() => handleTabChange('video')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] font-['Cabin'] text-xs font-semibold transition-all cursor-pointer ${
-                    activeTab === 'video'
-                      ? 'bg-[#7b39fc] text-white shadow-md shadow-[#7b39fc]/30'
-                      : isLight 
-                        ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                        : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <Film size={14} />
-                  <span>Video Stream ({metadata.formats?.video?.length || 0})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleTabChange('audio')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] font-['Cabin'] text-xs font-semibold transition-all cursor-pointer ${
-                    activeTab === 'audio'
-                      ? 'bg-[#7b39fc] text-white shadow-md shadow-[#7b39fc]/30'
-                      : isLight
-                        ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                        : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <Music size={14} />
-                  <span>Audio Only ({metadata.formats?.audio?.length || 0})</span>
-                </button>
+              {/* Format Tabs (Video vs Audio) + Quick Settings Link */}
+              <div className={`flex flex-wrap items-center justify-between gap-2 mt-4 border-b pb-3 ${isLight ? 'border-neutral-200' : 'border-white/10'}`}>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('video')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] font-['Cabin'] text-xs font-semibold transition-all cursor-pointer ${
+                      activeTab === 'video'
+                        ? 'bg-[#7b39fc] text-white shadow-md shadow-[#7b39fc]/30'
+                        : isLight 
+                          ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Film size={14} />
+                    <span>Video Stream ({metadata.formats?.video?.length || 0})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTabChange('audio')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] font-['Cabin'] text-xs font-semibold transition-all cursor-pointer ${
+                      activeTab === 'audio'
+                        ? 'bg-[#7b39fc] text-white shadow-md shadow-[#7b39fc]/30'
+                        : isLight
+                          ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Music size={14} />
+                    <span>Audio Only ({metadata.formats?.audio?.length || 0})</span>
+                  </button>
+                </div>
+
+                {onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    className={`text-[11px] font-['Manrope'] font-medium flex items-center gap-1 hover:text-[#7b39fc] transition-colors cursor-pointer ${
+                      isLight ? 'text-neutral-500' : 'text-white/50'
+                    }`}
+                    title="Change default resolution & format"
+                  >
+                    <Sliders size={12} />
+                    <span>Preset: {preferences?.defaultFormat === 'audio' ? 'Audio' : preferences?.defaultQuality || '1080p'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Formats Pills */}

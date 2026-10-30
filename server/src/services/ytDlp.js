@@ -62,7 +62,7 @@ function getMetadata(url) {
     }
 
     const ytCmd = getYtDlpCommand();
-    const cmd = `${ytCmd} ${cookiesFlag} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
+    const cmd = `${ytCmd} ${cookiesFlag} --extractor-args "youtube:player_client=tv_embedded" --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
     const env = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
 
     console.log(`Executing metadata command: ${cmd}`);
@@ -277,6 +277,7 @@ function startDownload(jobId, url, formatId, type) {
   const args = [];
 
   args.push('--newline');
+  args.push('--extractor-args', 'youtube:player_client=tv_embedded');
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);
   }

@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('../config/config');
 const { JOB_STATUS, ERROR_CODES } = require('../../../shared/constants/constants.json');
 const ytDlpService = require('../services/ytDlp');
-const jobsService = require('./jobs');
+const jobsService = require('../services/jobs');
 
 /**
  * Extract metadata for a URL.

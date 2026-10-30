@@ -223,7 +223,21 @@ function startDownload(jobId, url, formatId, type) {
 
   // Spawn yt-dlp process
   console.log(`Spawning yt-dlp with args: ${args.join(' ')}`);
-  const child = spawn('yt-dlp', args);
+  // Spawn yt-dlp process across Windows and Linux
+  const isWin = process.platform === 'win32';
+  const spawnCmd = isWin ? 'python' : 'yt-dlp';
+  const spawnArgs = isWin ? ['-m', 'yt_dlp', ...args] : args;
+
+  console.log(`Spawning ${spawnCmd} with args: ${spawnArgs.join(' ')}`);
+  const child = spawn(spawnCmd, spawnArgs);
+
+  child.on('error', (err) => {
+    console.error(`Spawn error for job ${jobId}:`, err);
+    jobsService.updateJob(jobId, {
+      status: JOB_STATUS.FAILED,
+      error: `Failed to initialize stream worker: ${err.message}`
+    });
+  });
 
   // Update job process reference
   const rawJob = jobsService.jobs.get(jobId);

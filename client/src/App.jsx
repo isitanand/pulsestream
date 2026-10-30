@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import HeroSection from './components/HeroSection';
 import FeaturesSection from './components/FeaturesSection';
+import DeveloperModal from './components/DeveloperModal';
 import { 
-  X, History, Trash2, Info, CheckCircle, 
-  AlertTriangle, User
+  X, History, Trash2, CheckCircle, 
+  AlertTriangle, Info
 } from 'lucide-react';
 
 export default function App() {
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme_preference') || 'dark';
+  });
+
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDevInfoOpen, setIsDevInfoOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -27,6 +32,16 @@ export default function App() {
     const saved = localStorage.getItem('download_history');
     return saved ? JSON.parse(saved) : [];
   });
+
+  useEffect(() => {
+    localStorage.setItem('theme_preference', theme);
+    document.documentElement.classList.remove('theme-dark', 'theme-light');
+    document.documentElement.classList.add(`theme-${theme}`);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   useEffect(() => {
     localStorage.setItem('preferences', JSON.stringify(preferences));
@@ -64,37 +79,52 @@ export default function App() {
     showNotification('Item removed from history', 'info');
   };
 
+  const isLight = theme === 'light';
+
   return (
-    <div className="min-h-screen bg-[#120f1d] text-white font-['Inter'] relative selection:bg-[#7b39fc] selection:text-white">
-      {/* 1. Fullscreen Hero Section (with built-in Downloader & Video Background) */}
+    <div className={`min-h-screen theme-${theme} font-['Inter'] relative selection:bg-[#7b39fc] selection:text-white transition-colors duration-300`}>
+      {/* 1. Fullscreen Hero Section */}
       <HeroSection 
         addHistory={addHistory}
         showNotification={showNotification}
         preferences={preferences}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenDevInfo={() => setIsDevInfoOpen(true)}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
 
-      {/* 2. Complete Supporting Sections Below Hero */}
-      <FeaturesSection />
+      {/* 2. Features, Supported Sites & Modern Footer */}
+      <FeaturesSection theme={theme} />
 
-      {/* 3. History Modal */}
+      {/* 3. Redesigned Developer Modal (Anand Choubey) */}
+      <DeveloperModal 
+        isOpen={isDevInfoOpen}
+        onClose={() => setIsDevInfoOpen(false)}
+        theme={theme}
+      />
+
+      {/* 4. History Modal */}
       {isHistoryOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
           onClick={() => setIsHistoryOpen(false)}
         >
           <div 
-            className="bg-[#19142b] border border-white/15 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative"
+            className={`w-full max-w-lg p-6 rounded-2xl shadow-2xl relative border ${
+              isLight 
+                ? 'bg-white text-neutral-900 border-neutral-200' 
+                : 'bg-[#19142b] text-white border-white/15'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
+            <div className={`flex items-center justify-between pb-4 border-b mb-4 ${isLight ? 'border-neutral-200' : 'border-white/10'}`}>
               <h2 className="font-['Manrope'] font-bold text-xl flex items-center gap-2">
                 <History size={20} className="text-[#7b39fc]" /> Download History
               </h2>
               <button 
                 onClick={() => setIsHistoryOpen(false)}
-                className="text-white/60 hover:text-white p-1 hover:bg-white/10 rounded-full cursor-pointer"
+                className={`p-1 rounded-full cursor-pointer ${isLight ? 'hover:bg-neutral-100 text-neutral-500' : 'hover:bg-white/10 text-white/60'}`}
               >
                 <X size={20} />
               </button>
@@ -102,21 +132,28 @@ export default function App() {
 
             <div className="max-h-[350px] overflow-y-auto flex flex-col gap-2.5 my-2">
               {history.length === 0 ? (
-                <div className="py-12 text-center text-white/50 text-sm">
+                <div className={`py-12 text-center text-sm ${isLight ? 'text-neutral-400' : 'text-white/50'}`}>
                   No records yet. Completed jobs will appear here.
                 </div>
               ) : (
                 history.map((item) => (
-                  <div key={item.id} className="bg-white/5 border border-white/10 p-3 rounded-xl flex items-center justify-between">
+                  <div 
+                    key={item.id} 
+                    className={`p-3 rounded-xl flex items-center justify-between border ${
+                      isLight ? 'bg-neutral-50 border-neutral-200' : 'bg-white/5 border-white/10'
+                    }`}
+                  >
                     <div className="overflow-hidden pr-3">
-                      <div className="text-sm font-medium text-white truncate">{item.title}</div>
-                      <div className="text-xs text-white/50 mt-0.5">
+                      <div className={`text-sm font-medium truncate ${isLight ? 'text-neutral-900' : 'text-white'}`}>
+                        {item.title}
+                      </div>
+                      <div className={`text-xs mt-0.5 ${isLight ? 'text-neutral-500' : 'text-white/50'}`}>
                         {item.format} • {item.size} • {new Date(item.date).toLocaleDateString()}
                       </div>
                     </div>
                     <button 
                       onClick={() => deleteHistoryItem(item.id)}
-                      className="text-white/40 hover:text-red-400 p-1.5 transition-colors cursor-pointer"
+                      className="text-neutral-400 hover:text-red-500 p-1.5 transition-colors cursor-pointer"
                       title="Delete"
                     >
                       <Trash2 size={16} />
@@ -127,10 +164,10 @@ export default function App() {
             </div>
 
             {history.length > 0 && (
-              <div className="pt-4 border-t border-white/10 flex justify-end">
+              <div className={`pt-4 border-t flex justify-end ${isLight ? 'border-neutral-200' : 'border-white/10'}`}>
                 <button 
                   onClick={clearHistory}
-                  className="text-xs text-red-400 hover:text-red-300 font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                  className="text-xs text-red-500 hover:text-red-600 font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
                 >
                   <Trash2 size={14} /> Clear All History
                 </button>
@@ -140,69 +177,12 @@ export default function App() {
         </div>
       )}
 
-      {/* 4. Developer Info Modal (Anand Choubey) */}
-      {isDevInfoOpen && (
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in"
-          onClick={() => setIsDevInfoOpen(false)}
-        >
-          <div 
-            className="bg-[#19142b] border border-white/15 rounded-2xl w-full max-w-md p-6 shadow-2xl relative text-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-end mb-2">
-              <button 
-                onClick={() => setIsDevInfoOpen(false)}
-                className="text-white/60 hover:text-white p-1 hover:bg-white/10 rounded-full cursor-pointer"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-[#7b39fc] to-[#a855f7] flex items-center justify-center text-white text-2xl font-extrabold mx-auto mb-4 shadow-lg shadow-[#7b39fc]/30 font-['Manrope']">
-              AC
-            </div>
-
-            <h3 className="font-['Manrope'] font-bold text-2xl text-white">Anand Choubey</h3>
-            <p className="text-sm text-white/60 mt-1 font-['Inter']">Full-Stack Developer & Software Engineer</p>
-
-            <div className="mt-6 flex flex-col gap-3 text-left text-sm font-['Inter']">
-              <div className="flex justify-between py-2 border-b border-white/10">
-                <span className="text-white/50">Email</span>
-                <a href="mailto:anandchoubey2005@gmail.com" className="text-[#a78bfa] hover:underline font-medium">
-                  anandchoubey2005@gmail.com
-                </a>
-              </div>
-              <div className="flex justify-between py-2 border-b border-white/10">
-                <span className="text-white/50">LinkedIn</span>
-                <a href="https://linkedin.com/in/anand-choubey-979b17326" target="_blank" rel="noopener noreferrer" className="text-[#a78bfa] hover:underline font-medium">
-                  anand-choubey
-                </a>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-white/50">GitHub</span>
-                <a href="https://github.com/isitanand" target="_blank" rel="noopener noreferrer" className="text-[#a78bfa] hover:underline font-medium">
-                  isitanand
-                </a>
-              </div>
-            </div>
-
-            <button 
-              onClick={() => setIsDevInfoOpen(false)}
-              className="mt-6 w-full bg-[#7b39fc] hover:bg-[#8f52ff] text-white font-['Cabin'] font-medium py-2.5 rounded-xl transition-colors cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 5. Notifications Toasts */}
       <div className="fixed top-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
         {notifications.map(n => (
           <div 
             key={n.id} 
-            className="pointer-events-auto bg-[#1f1a32]/95 border border-white/15 backdrop-blur-md px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-medium animate-in slide-in-from-top-2"
+            className="pointer-events-auto bg-[#1f1a32]/95 border border-white/15 text-white backdrop-blur-md px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-sm font-medium animate-in slide-in-from-top-2"
           >
             {n.type === 'success' && <CheckCircle size={18} className="text-emerald-400" />}
             {n.type === 'error' && <X size={18} className="text-rose-400" />}

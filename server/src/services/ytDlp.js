@@ -51,7 +51,7 @@ function getYtDlpCommand() {
 const cookiesPath = path.resolve(__dirname, '../../cookies.txt');
 const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
 
-function runYtDlpMetadata(url, extraArgs = []) {
+function runYtDlpMetadata(url, extraArgs = [], useCookies = true) {
   return new Promise((resolve, reject) => {
     const isWin = process.platform === 'win32';
     const localBinary = path.join(binPath, 'yt-dlp');
@@ -72,7 +72,7 @@ function runYtDlpMetadata(url, extraArgs = []) {
 
     const args = [...baseArgs];
 
-    if (cookiesPath && fs.existsSync(cookiesPath)) {
+    if (useCookies && cookiesPath && fs.existsSync(cookiesPath)) {
       args.push('--cookies', cookiesPath);
     }
 
@@ -113,32 +113,22 @@ async function getMetadata(url) {
 
   const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
 
-  // Strategy 1: If on cloud datacenter without cookies, use android player with webpage bypass to avoid 429
-  if (isYouTube && !cookiesFlag) {
+  // Strategy 1: Always try Android Innertube bypass first WITHOUT cookies (immune to 429 and expired cookies)
+  if (isYouTube) {
     try {
-      console.log('Attempting YouTube extraction via Android Innertube bypass (execFile)...');
-      return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs']);
+      console.log('Attempting YouTube extraction via Android Innertube bypass (immune to cookie expiration)...');
+      return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs'], false);
     } catch (err1) {
-      console.warn('Android bypass initial attempt error, falling back:', err1.stderr || err1.message);
+      console.warn('Android bypass without cookies failed, falling back:', err1.stderr || err1.message);
     }
   }
 
-  // Strategy 2: Standard extraction (or authenticated extraction if cookiesFlag is set)
+  // Strategy 2: Standard/authenticated extraction with cookies if available
   try {
-    return await runYtDlpMetadata(url);
+    return await runYtDlpMetadata(url, [], true);
   } catch (err2) {
     const stderr = err2.stderr || '';
     console.error('Standard extraction error:', stderr);
-
-    // Strategy 3: Final fallback to Android bypass if it was skipped or failed
-    if (isYouTube) {
-      try {
-        console.log('Falling back to Android Innertube bypass (final attempt)...');
-        return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs']);
-      } catch (err3) {
-        console.error('All YouTube extraction strategies failed:', err3.stderr);
-      }
-    }
 
     let errorCode = ERROR_CODES.METADATA_FAILED;
     let errorMessage = 'Failed to extract metadata from the provided URL';
@@ -338,7 +328,7 @@ function startDownload(jobId, url, formatId, type) {
   if (isYouTube && !cookiesFlag) {
     args.push('--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs');
   }
-  if (cookiesPath && fs.existsSync(cookiesPath)) {
+  if (!isYouTube && cookiesPath && fs.existsSync(cookiesPath)) {
     args.push('--cookies', cookiesPath);
   }
   if (fs.existsSync(binPath)) {
@@ -365,8 +355,8 @@ function startDownload(jobId, url, formatId, type) {
       );
     }
   } else {
-    // Video type: on cloud datacenters without cookies, stream pre-merged format to prevent bot checks
-    if (isYouTube && !cookiesFlag) {
+    // Video type: on cloud datacenters, stream format without separate web audio to prevent bot checks
+    if (isYouTube) {
       args.push(
         '-f', `${formatId}/b/best`,
         '-o', outputTemplate,

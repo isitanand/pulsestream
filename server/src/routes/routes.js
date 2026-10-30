@@ -42,6 +42,9 @@ router.get('/diag', async (req, res) => {
     const cookieArgs = fs.existsSync(cookiesFile) ? ['--cookies', cookiesFile] : [];
     const testArgs = [...cookieArgs, '--dump-json', '--no-playlist', 'https://youtu.be/zZcV9kDMQzI?si=iHU3etTbcGHSWXUR'];
 
+    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
+    const env = { ...process.env, PATH: fullPath };
+
     execFile(command, testArgs, { maxBuffer: 25 * 1024 * 1024, env }, (err, stdout, stderr) => {
       let parsedTitle = null;
       if (stdout) {
@@ -62,6 +65,9 @@ router.get('/diag', async (req, res) => {
       });
     });
     return;
+
+    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
+    const env = { ...process.env, PATH: fullPath };
 
     const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
     const env = { ...process.env, PATH: fullPath };

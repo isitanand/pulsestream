@@ -25,8 +25,22 @@ if (!fs.existsSync(config.DOWNLOAD_DIR)) {
 // Write YouTube cookies from env variable to file (required for Render deployment)
 const cookiesPath = path.resolve(__dirname, '../cookies.txt');
 if (process.env.YOUTUBE_COOKIES) {
-  fs.writeFileSync(cookiesPath, process.env.YOUTUBE_COOKIES, 'utf8');
-  console.log('YouTube cookies written to:', cookiesPath);
+  let cookiesContent = process.env.YOUTUBE_COOKIES;
+  // If the environment variable contains literal '\n' sequences, normalize to real newlines
+  if (cookiesContent.includes('\\n') && (!cookiesContent.includes('\n') || cookiesContent.split('\n').length <= 2)) {
+    cookiesContent = cookiesContent.replace(/\\n/g, '\n');
+  }
+  // If base64-encoded, decode it
+  if (!cookiesContent.startsWith('#') && cookiesContent.length > 50 && !cookiesContent.includes('\t')) {
+    try {
+      const decoded = Buffer.from(cookiesContent, 'base64').toString('utf8');
+      if (decoded.includes('# Netscape') || decoded.includes('.youtube.com')) {
+        cookiesContent = decoded;
+      }
+    } catch(e) {}
+  }
+  fs.writeFileSync(cookiesPath, cookiesContent, 'utf8');
+  console.log('YouTube cookies written to:', cookiesPath, '(' + cookiesContent.length + ' bytes, ' + cookiesContent.split('\n').length + ' lines)');
 }
 
 // Log requests in development

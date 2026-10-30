@@ -15,6 +15,20 @@ router.get('/health', (req, res) => {
   ];
   const foundPath = candidateCookies.find(p => fs.existsSync(p) && fs.statSync(p).size > 10) || null;
   const fileSize = foundPath ? fs.statSync(foundPath).size : 0;
+  let lineCount = 0;
+  let hasEscapedNewlines = false;
+  let startsWithNetscape = false;
+  let sample = '';
+
+  if (foundPath) {
+    try {
+      const content = fs.readFileSync(foundPath, 'utf8');
+      lineCount = content.split('\n').length;
+      hasEscapedNewlines = content.includes('\\n');
+      startsWithNetscape = content.startsWith('# Netscape');
+      sample = content.slice(0, 150).replace(/[a-zA-Z0-9_\-]{15,}/g, '[REDACTED_TOKEN]');
+    } catch(e) {}
+  }
 
   res.status(200).json({
     status: 'ok',
@@ -23,7 +37,11 @@ router.get('/health', (req, res) => {
       envExists: !!process.env.YOUTUBE_COOKIES,
       envLength: process.env.YOUTUBE_COOKIES ? process.env.YOUTUBE_COOKIES.length : 0,
       foundPath,
-      fileSize
+      fileSize,
+      lineCount,
+      hasEscapedNewlines,
+      startsWithNetscape,
+      sample
     },
     timestamp: Date.now()
   });

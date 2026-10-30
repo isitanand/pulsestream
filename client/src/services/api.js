@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://pulsestream-vop8.onrender.com/api');
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://pulsestream-api-dq0u.onrender.com/api');
 
 /**
  * Handle API responses and throw parsed errors.

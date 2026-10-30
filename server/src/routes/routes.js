@@ -38,14 +38,28 @@ router.get('/diag', async (req, res) => {
       try { cookiesLength = fs.readFileSync(path.join(serverDir, 'cookies.txt'), 'utf8').length; } catch (e) {}
     }
 
-    res.json({
-      platform: process.platform,
-      serverFiles,
-      hasCookies,
-      cookiesLength,
-      hasEnvCookies: !!process.env.YOUTUBE_COOKIES,
-      envCookiesLength: process.env.YOUTUBE_COOKIES ? process.env.YOUTUBE_COOKIES.length : 0,
-      uptime: process.uptime()
+    const cookiesFile = path.join(serverDir, 'cookies.txt');
+    const cookieArgs = fs.existsSync(cookiesFile) ? ['--cookies', cookiesFile] : [];
+    const testArgs = [...cookieArgs, '--dump-json', '--no-playlist', 'https://youtu.be/zZcV9kDMQzI?si=iHU3etTbcGHSWXUR'];
+
+    execFile(command, testArgs, { maxBuffer: 25 * 1024 * 1024, env }, (err, stdout, stderr) => {
+      let parsedTitle = null;
+      if (stdout) {
+        try {
+          const json = JSON.parse(stdout);
+          parsedTitle = json.title;
+        } catch (e) {}
+      }
+      res.json({
+        platform: process.platform,
+        command,
+        hasCookies: fs.existsSync(cookiesFile),
+        cookiesLength,
+        testArgs,
+        parsedTitle,
+        error: err ? err.message : null,
+        stderr: stderr ? stderr.substring(0, 500) : null
+      });
     });
     return;
 

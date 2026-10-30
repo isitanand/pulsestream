@@ -6,11 +6,45 @@ const config = require('../config/config');
 const { JOB_STATUS, ERROR_CODES } = require('../../../shared/constants/constants.json');
 const jobsService = require('./jobs');
 
-// Prepend local bin to PATH if it exists (e.g., on Render deployment)
-const binPath = path.resolve(__dirname, '../../bin');
+// Resolve bin directory candidates (handles both local repo and Render's /server root)
+const candidateBins = [
+  path.resolve(__dirname, '../../bin'),
+  path.resolve(process.cwd(), 'bin'),
+  path.resolve(process.cwd(), 'server/bin')
+];
+const binPath = candidateBins.find(p => fs.existsSync(p)) || candidateBins[0];
+
 if (fs.existsSync(binPath)) {
-  process.env.PATH = `${binPath}${path.delimiter}${process.env.PATH}`;
-  console.log('Prepended local bin to PATH:', binPath);
+  process.env.PATH = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
+  console.log('Using local bin directory:', binPath);
+}
+
+// Ensure execution permissions on Linux for local binaries
+if (process.platform !== 'win32' && fs.existsSync(binPath)) {
+  ['yt-dlp', 'ffmpeg', 'ffprobe'].forEach(binary => {
+    const filePath = path.join(binPath, binary);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.chmodSync(filePath, 0o755);
+      } catch (e) {
+        console.warn(`Could not set permissions on ${binary}:`, e.message);
+      }
+    }
+  });
+}
+
+/**
+ * Returns the best available executable command for invoking yt-dlp.
+ */
+function getYtDlpCommand() {
+  const isWin = process.platform === 'win32';
+  if (isWin) return 'python -m yt_dlp';
+
+  const localBinary = path.join(binPath, 'yt-dlp');
+  if (fs.existsSync(localBinary)) {
+    return `"${localBinary}"`;
+  }
+  return 'yt-dlp';
 }
 
 // Path to cookies file (written from YOUTUBE_COOKIES env var at server startup if present)
@@ -27,12 +61,14 @@ function getMetadata(url) {
       return reject({ code: ERROR_CODES.INVALID_URL, message: 'URL is required' });
     }
 
-    const isWin = process.platform === 'win32';
-    const ytCmd = isWin ? 'python -m yt_dlp' : 'yt-dlp';
-    const cmd = `${ytCmd} --js-runtimes node --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
-    
+    const ytCmd = getYtDlpCommand();
+    const cmd = `${ytCmd} ${cookiesFlag} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
+    const env = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
+
+    console.log(`Executing metadata command: ${cmd}`);
+
     // Increase maxBuffer to 25MB to handle very large metadata JSONs
-    exec(cmd, { maxBuffer: 25 * 1024 * 1024 }, (error, stdout, stderr) => {
+    exec(cmd, { maxBuffer: 25 * 1024 * 1024, env }, (error, stdout, stderr) => {
       if (error) {
         console.error('yt-dlp metadata error:', stderr || error.message);
         
@@ -42,11 +78,11 @@ function getMetadata(url) {
         if (stderr && (stderr.includes('Unsupported URL') || stderr.includes('not a valid URL'))) {
           errorCode = ERROR_CODES.UNSUPPORTED_SITE;
           errorMessage = 'The provided website or URL is not supported by the downloader';
-        } else if (stderr && stderr.includes('Sign in to confirm your age')) {
-          errorMessage = 'This video is age-restricted and requires authentication';
+        } else if (stderr && (stderr.includes('Sign in to confirm your age') || stderr.includes('Sign in to confirm you’re not a bot'))) {
+          errorMessage = 'This video requires authentication or is restricted by the platform';
         }
         
-        return reject({ code: errorCode, message: errorMessage, details: stderr });
+        return reject({ code: errorCode, message: errorMessage, details: stderr || error.message });
       }
 
       try {
@@ -55,7 +91,7 @@ function getMetadata(url) {
         resolve(parsed);
       } catch (e) {
         console.error('Failed to parse metadata JSON:', e);
-        reject({ code: ERROR_CODES.SERVER_ERROR, message: 'Failed to process metadata response' });
+        reject({ code: ERROR_CODES.SERVER_ERROR, message: 'Failed to process metadata response', details: e.message });
       }
     });
   });
@@ -163,52 +199,66 @@ function parseMetadata(data, url) {
 
   // Sort video formats in descending standard order
   const standardOrder = ['4k', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'];
-  const videoFormats = Array.from(videoFormatsMap.values()).sort((a, b) => {
-    const idxA = standardOrder.indexOf(a.resolution);
-    const idxB = standardOrder.indexOf(b.resolution);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return b.height - a.height;
-  });
+  const videoFormats = Array.from(videoFormatsMap.values())
+    .sort((a, b) => {
+      const idxA = standardOrder.indexOf(a.resolution);
+      const idxB = standardOrder.indexOf(b.resolution);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return (b.height || 0) - (a.height || 0);
+    })
+    .map(({ score, ...rest }) => rest);
 
-  // Sort audio formats: size / bitrate (descending)
-  audioFormats.sort((a, b) => (b.size || 0) - (a.size || 0));
+  // Add virtual audio conversion presets if any audio format exists
+  if (audioFormats.length > 0) {
+    audioFormats.unshift(
+      {
+        formatId: 'mp3-320k',
+        ext: 'mp3',
+        acodec: 'mp3',
+        bitrate: '320kbps',
+        size: null,
+        note: 'MP3 (320kbps) Studio Quality'
+      },
+      {
+        formatId: 'mp3-192k',
+        ext: 'mp3',
+        acodec: 'mp3',
+        bitrate: '192kbps',
+        size: null,
+        note: 'MP3 (192kbps) Standard'
+      }
+    );
+  }
 
-  // Add virtual audio options for MP3 conversion (since ffmpeg is installed)
-  audioFormats.unshift(
-    {
-      formatId: 'mp3-320k',
-      ext: 'mp3',
-      acodec: 'mp3',
-      bitrate: '320kbps',
-      size: duration ? Math.round((320 * 1000 * duration) / 8) : null,
-      note: 'MP3 (High Quality 320kbps) - Conversion'
-    },
-    {
-      formatId: 'mp3-192k',
-      ext: 'mp3',
-      acodec: 'mp3',
-      bitrate: '192kbps',
-      size: duration ? Math.round((192 * 1000 * duration) / 8) : null,
-      note: 'MP3 (Standard Quality 192kbps) - Conversion'
+  // Format total duration string
+  let durationFormatted = '0:00';
+  if (duration > 0) {
+    const hours = Math.floor(duration / 3600);
+    const minutes = Math.floor((duration % 3600) / 60);
+    const seconds = Math.floor(duration % 60);
+    if (hours > 0) {
+      durationFormatted = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      durationFormatted = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     }
-  );
+  }
 
-  // Get best available thumbnail
-  let thumbnail = data.thumbnail || '';
+  // Choose the best thumbnail
+  let thumbnail = data.thumbnail || null;
   if (data.thumbnails && data.thumbnails.length > 0) {
     const sortedThumbnails = [...data.thumbnails].sort((a, b) => (b.width || 0) - (a.width || 0));
     thumbnail = sortedThumbnails[0].url || thumbnail;
   }
 
   return {
-    title: data.title || 'Unknown Title',
-    description: data.description || '',
-    thumbnail,
-    duration,
-    uploader: data.uploader || 'Unknown Creator',
     url,
+    title: data.title || 'Untitled Media',
+    uploader: data.uploader || data.channel || data.artist || 'Unknown Creator',
+    duration: durationFormatted,
+    durationSeconds: duration,
+    thumbnail,
     formats: {
       video: videoFormats,
       audio: audioFormats
@@ -217,21 +267,15 @@ function parseMetadata(data, url) {
 }
 
 /**
- * Start download job. Spawns yt-dlp.
+ * Start the download and stream processing job.
  */
 function startDownload(jobId, url, formatId, type) {
-  // Ensure temp dir exists
-  if (!fs.existsSync(config.DOWNLOAD_DIR)) {
-    fs.mkdirSync(config.DOWNLOAD_DIR, { recursive: true });
-  }
-
   const job = jobsService.getJob(jobId);
   if (!job) return;
 
   const outputTemplate = path.join(config.DOWNLOAD_DIR, `${jobId}.%(ext)s`);
   const args = [];
 
-  args.push('--js-runtimes', 'node');
   args.push('--newline');
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);
@@ -257,8 +301,7 @@ function startDownload(jobId, url, formatId, type) {
       );
     }
   } else {
-    // Video type: high-resolution formats (e.g. YouTube 720p/1080p/4K) require audio merging.
-    // Specifying format_id+bestaudio merges the pristine video stream with the best audio track via ffmpeg.
+    // Video type: high-resolution formats require audio merging.
     args.push(
       '-f', `${formatId}+bestaudio/best`,
       '--merge-output-format', 'mp4',
@@ -269,11 +312,15 @@ function startDownload(jobId, url, formatId, type) {
 
   // Spawn yt-dlp process across Windows and Linux
   const isWin = process.platform === 'win32';
-  const spawnCmd = isWin ? 'python' : 'yt-dlp';
-  const spawnArgs = isWin ? ['-m', 'yt_dlp', ...args] : args;
+  const localBinary = path.join(binPath, 'yt-dlp');
+  let spawnCmd = isWin ? 'python' : (fs.existsSync(localBinary) ? localBinary : 'yt-dlp');
+  let spawnArgs = isWin ? ['-m', 'yt_dlp', ...args] : args;
+
+  const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
+  const env = { ...process.env, PATH: fullPath };
 
   console.log(`Spawning ${spawnCmd} with args: ${spawnArgs.join(' ')}`);
-  const child = spawn(spawnCmd, spawnArgs);
+  const child = spawn(spawnCmd, spawnArgs, { env });
 
   child.on('error', (err) => {
     console.error(`Spawn error for job ${jobId}:`, err);
@@ -297,29 +344,30 @@ function startDownload(jobId, url, formatId, type) {
     const lines = data.toString().split(/[\r\n]+/);
     for (const line of lines) {
       if (!line.trim()) continue;
-      // Check for merger
-      if (line.includes('[Merger]') || line.includes('[ffmpeg]') || line.includes('Merging formats')) {
+      
+      // Check for merger stage
+      if (line.includes('[Merger]') || line.includes('Merging formats into')) {
         jobsService.updateJob(jobId, {
           status: JOB_STATUS.MERGING,
           progress: 99,
-          speed: '0 B/s',
-          eta: '--:--'
+          speed: 'Muxing',
+          eta: 'Finishing'
         });
         continue;
       }
 
-      // Check for standard download progress
+      // Check for download progress
       const match = line.match(progressRegex);
       if (match) {
         const progress = parseFloat(match[1]);
-        const totalSize = match[2];
+        const size = match[2];
         const speed = match[3];
         const eta = match[4];
 
         jobsService.updateJob(jobId, {
           status: JOB_STATUS.DOWNLOADING,
-          progress,
-          totalSize,
+          progress: Math.min(progress, 98),
+          size,
           speed,
           eta
         });
@@ -328,62 +376,53 @@ function startDownload(jobId, url, formatId, type) {
   });
 
   child.stderr.on('data', (data) => {
-    const line = data.toString();
-    console.warn(`yt-dlp stderr [${jobId}]:`, line);
+    console.error(`yt-dlp stderr [${jobId}]:`, data.toString());
   });
 
   child.on('close', (code) => {
-    console.log(`yt-dlp process for job ${jobId} exited with code ${code}`);
+    console.log(`yt-dlp process closed with code ${code} for job ${jobId}`);
     
-    const currentJob = jobsService.jobs.get(jobId);
-    if (!currentJob) return;
-
-    if (currentJob.status === JOB_STATUS.CANCELLED) {
-      console.log(`Job ${jobId} was already cancelled.`);
-      return;
-    }
-
     if (code === 0) {
-      // Find the completed file in the temp directory (starts with jobId)
+      // Find the generated output file matching outputTemplate base
       try {
-        const files = fs.readdirSync(config.DOWNLOAD_DIR);
-        const matchFile = files.find(f => f.startsWith(jobId));
+        const dirFiles = fs.readdirSync(config.DOWNLOAD_DIR);
+        const matchingFile = dirFiles.find(f => f.startsWith(`${jobId}.`));
 
-        if (matchFile) {
-          const finalFilePath = path.join(config.DOWNLOAD_DIR, matchFile);
-          
-          // Generate a user-friendly name using the video title and extension
-          const ext = path.extname(matchFile);
-          const cleanTitle = sanitize(currentJob.fileName) || 'download';
-          const downloadName = `${cleanTitle}${ext}`;
+        if (matchingFile) {
+          const fullFilePath = path.join(config.DOWNLOAD_DIR, matchingFile);
+          const ext = path.extname(matchingFile).substring(1);
+          const sanitizedTitle = sanitize(rawJob.fileName || 'download');
+          const cleanFileName = `${sanitizedTitle}.${ext}`;
 
           jobsService.updateJob(jobId, {
             status: JOB_STATUS.COMPLETED,
             progress: 100,
-            speed: '0 B/s',
-            eta: '00:00',
-            filePath: finalFilePath,
-            fileName: downloadName,
-            process: null
+            filePath: fullFilePath,
+            fileName: cleanFileName,
+            speed: 'Done',
+            eta: '0s'
           });
-          console.log(`Job ${jobId} completed successfully. Saved to ${finalFilePath}`);
+          console.log(`Job ${jobId} successfully prepared file: ${fullFilePath}`);
         } else {
-          throw new Error('Downloaded file not found in temp directory');
+          jobsService.updateJob(jobId, {
+            status: JOB_STATUS.FAILED,
+            error: 'Output media file could not be located on disk after processing'
+          });
         }
       } catch (e) {
-        console.error(`Error completing job ${jobId}:`, e);
         jobsService.updateJob(jobId, {
           status: JOB_STATUS.FAILED,
-          error: 'Downloaded file could not be finalized.',
-          process: null
+          error: `Failed to inspect download artifacts: ${e.message}`
         });
       }
     } else {
-      jobsService.updateJob(jobId, {
-        status: JOB_STATUS.FAILED,
-        error: `yt-dlp exited with error code ${code}. Check the logs or try another quality option.`,
-        process: null
-      });
+      const currentJob = jobsService.getJob(jobId);
+      if (currentJob && currentJob.status !== JOB_STATUS.CANCELLED) {
+        jobsService.updateJob(jobId, {
+          status: JOB_STATUS.FAILED,
+          error: `Stream processing exited with error code ${code}`
+        });
+      }
     }
   });
 }

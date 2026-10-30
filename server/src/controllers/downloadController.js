@@ -4,7 +4,7 @@ const path = require('path');
 const config = require('../config/config');
 const { JOB_STATUS, ERROR_CODES } = require('../../../shared/constants/constants.json');
 const ytDlpService = require('../services/ytDlp');
-const jobsService = require('../services/jobs');
+const jobsService = require('./jobs');
 
 /**
  * Extract metadata for a URL.
@@ -19,7 +19,8 @@ async function getMetadata(req, res) {
     const status = error.code === ERROR_CODES.UNSUPPORTED_SITE || error.code === ERROR_CODES.INVALID_URL ? 400 : 500;
     return res.status(status).json({
       code: error.code || ERROR_CODES.METADATA_FAILED,
-      message: error.message || 'Failed to fetch metadata'
+      message: error.message || 'Failed to fetch metadata',
+      details: error.details || error.message
     });
   }
 }

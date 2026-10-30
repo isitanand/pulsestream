@@ -3,7 +3,7 @@ set -e
 
 echo "=== Starting Render Server Build ==="
 
-# 1. Install dependencies
+# 1. Install Node dependencies
 echo "Installing Node.js dependencies..."
 npm install
 
@@ -11,10 +11,19 @@ npm install
 echo "Creating local bin directory..."
 mkdir -p bin
 
-# 3. Download yt-dlp binary from GitHub Releases
+# 3. Download standalone yt-dlp binary from GitHub Releases
 echo "Downloading yt-dlp binary..."
 curl -fL --retry 3 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o bin/yt-dlp
 chmod +x bin/yt-dlp
+
+# Also install yt-dlp via pip3/pip if available
+if command -v pip3 &> /dev/null; then
+  echo "Installing yt-dlp via pip3..."
+  pip3 install --upgrade yt-dlp || true
+elif command -v pip &> /dev/null; then
+  echo "Installing yt-dlp via pip..."
+  pip install --upgrade yt-dlp || true
+fi
 
 # 4. Download static ffmpeg / ffprobe from official yt-dlp FFmpeg-Builds on GitHub
 echo "Downloading static ffmpeg from GitHub Releases..."
@@ -33,7 +42,10 @@ chmod +x bin/ffmpeg bin/ffprobe
 echo "Cleaning up temporary tarball and extraction directory..."
 rm -rf ffmpeg.tar.xz ffmpeg-*
 
-echo "Verifying local binaries:"
+echo "Verifying local binaries in bin/:"
 ls -lh bin/
+
+echo "Testing yt-dlp executable:"
+bin/yt-dlp --version || true
 
 echo "=== Render Server Build Complete ==="

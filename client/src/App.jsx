@@ -10,7 +10,7 @@ import {
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme_preference') || 'dark';
+    return localStorage.getItem('theme_preference') || 'light';
   });
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);

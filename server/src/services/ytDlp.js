@@ -362,9 +362,9 @@ function startDownload(jobId, url, formatId, type) {
       );
     }
   } else {
-    // Video type: high-resolution formats require audio merging.
+    // Video type: high-resolution formats require audio merging with graceful fallback.
     args.push(
-      '-f', `${formatId}+bestaudio/best`,
+      '-f', `${formatId}+bestaudio/best/${formatId}/bestvideo+bestaudio/best`,
       '--merge-output-format', 'mp4',
       '-o', outputTemplate,
       url
@@ -436,7 +436,9 @@ function startDownload(jobId, url, formatId, type) {
     }
   });
 
+  let lastStderr = '';
   child.stderr.on('data', (data) => {
+    lastStderr += data.toString();
     console.error(`yt-dlp stderr [${jobId}]:`, data.toString());
   });
 
@@ -481,7 +483,7 @@ function startDownload(jobId, url, formatId, type) {
       if (currentJob && currentJob.status !== JOB_STATUS.CANCELLED) {
         jobsService.updateJob(jobId, {
           status: JOB_STATUS.FAILED,
-          error: `Stream processing exited with error code ${code}`
+          error: `Stream processing exited with error code ${code}: ${lastStderr.slice(-300).trim()}`
         });
       }
     }

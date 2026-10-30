@@ -1,4 +1,4 @@
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const sanitize = require('sanitize-filename');
@@ -51,15 +51,43 @@ function getYtDlpCommand() {
 const cookiesPath = path.resolve(__dirname, '../../cookies.txt');
 const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
 
-function runYtDlpMetadata(url, extraArgs = '') {
+function runYtDlpMetadata(url, extraArgs = []) {
   return new Promise((resolve, reject) => {
-    const ytCmd = getYtDlpCommand();
-    const cmd = `${ytCmd} ${cookiesFlag} ${extraArgs} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
-    const env = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
+    const isWin = process.platform === 'win32';
+    const localBinary = path.join(binPath, 'yt-dlp');
+    
+    let command;
+    let baseArgs;
 
-    console.log(`Executing metadata command: ${cmd}`);
+    if (isWin) {
+      command = 'python';
+      baseArgs = ['-m', 'yt_dlp'];
+    } else if (fs.existsSync(localBinary)) {
+      command = localBinary;
+      baseArgs = [];
+    } else {
+      command = 'yt-dlp';
+      baseArgs = [];
+    }
 
-    exec(cmd, { maxBuffer: 25 * 1024 * 1024, env }, (error, stdout, stderr) => {
+    const args = [...baseArgs];
+
+    if (cookiesPath && fs.existsSync(cookiesPath)) {
+      args.push('--cookies', cookiesPath);
+    }
+
+    if (extraArgs && extraArgs.length > 0) {
+      args.push(...extraArgs);
+    }
+
+    args.push('--dump-json', '--no-playlist', url);
+
+    const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
+    const env = { ...process.env, PATH: fullPath };
+
+    console.log(`Executing metadata via execFile: ${command} ${args.join(' ')}`);
+
+    execFile(command, args, { maxBuffer: 25 * 1024 * 1024, env }, (error, stdout, stderr) => {
       if (error) {
         return reject({ error, stderr: stderr || error.message });
       }
@@ -88,8 +116,8 @@ async function getMetadata(url) {
   // Strategy 1: If on cloud datacenter without cookies, use android player with webpage bypass to avoid 429
   if (isYouTube && !cookiesFlag) {
     try {
-      console.log('Attempting YouTube extraction via Android Innertube bypass...');
-      return await runYtDlpMetadata(url, '--extractor-args "youtube:player_client=android;player_skip=webpage,configs"');
+      console.log('Attempting YouTube extraction via Android Innertube bypass (execFile)...');
+      return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs']);
     } catch (err1) {
       console.warn('Android bypass initial attempt error, falling back:', err1.stderr || err1.message);
     }
@@ -106,7 +134,7 @@ async function getMetadata(url) {
     if (isYouTube) {
       try {
         console.log('Falling back to Android Innertube bypass (final attempt)...');
-        return await runYtDlpMetadata(url, '--extractor-args "youtube:player_client=android;player_skip=webpage,configs"');
+        return await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs']);
       } catch (err3) {
         console.error('All YouTube extraction strategies failed:', err3.stderr);
       }

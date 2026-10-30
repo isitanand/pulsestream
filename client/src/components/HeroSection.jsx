@@ -41,177 +41,184 @@ export default function HeroSection({
           : 'bg-gradient-to-b from-black/50 via-transparent to-[#120f1d]'
       }`} />
 
-      {/* 2. Navbar Component (Top Overlay) */}
-      <header className={`relative z-20 w-full px-6 md:px-[120px] py-[16px] flex items-center justify-between transition-colors ${
+      {/* 2. Navbar Component (Top Overlay with Perfectly Centered Nav & Refined Right Actions) */}
+      <header className={`relative z-20 w-full px-5 sm:px-8 md:px-12 lg:px-16 py-4 flex items-center justify-between transition-colors ${
         isLight ? 'text-[#171228]' : 'text-white'
       }`}>
-        {/* Left: Logo */}
-        <a href="#home" className="flex items-center gap-3 cursor-pointer group">
-          <svg 
-            width="32" 
-            height="32" 
-            viewBox="0 0 28 28" 
-            fill="none" 
-            xmlns="http://www.w3.org/2000/svg"
-            className="flex-shrink-0 transition-transform group-hover:scale-105"
-          >
-            <path 
-              d="M1.04356 6.35771L13.6437 0.666504L26.2438 6.35771L13.6437 12.0489L1.04356 6.35771ZM1.04356 8.85771L13.6437 14.5489V27.3335L1.04356 21.6423V8.85771ZM26.2438 8.85771L13.6437 14.5489V27.3335L26.2438 21.6423V8.85771Z" 
-              fill={isLight ? '#7b39fc' : 'white'} 
-            />
-          </svg>
-          <span className={`font-['Manrope'] font-extrabold text-xl tracking-tight ${isLight ? 'text-[#171228]' : 'text-white'}`}>
-            PulseStream
-          </span>
-        </a>
-
-        {/* Center-Left: Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center gap-8">
-          <a 
-            href="#home" 
-            className={`font-['Manrope'] font-medium text-[14px] hover:opacity-80 transition-opacity ${
-              isLight ? 'text-[#171228]' : 'text-white'
-            }`}
-          >
-            Home
+        {/* Left Column: Brand Logo & Title (flex-1 to anchor center nav symmetrically) */}
+        <div className="flex-1 flex items-center justify-start">
+          <a href="#home" className="flex items-center gap-2.5 cursor-pointer group">
+            <div className="relative">
+              <svg 
+                width="30" 
+                height="30" 
+                viewBox="0 0 28 28" 
+                fill="none" 
+                xmlns="http://www.w3.org/2000/svg"
+                className="flex-shrink-0 transition-transform group-hover:scale-105"
+              >
+                <path 
+                  d="M1.04356 6.35771L13.6437 0.666504L26.2438 6.35771L13.6437 12.0489L1.04356 6.35771ZM1.04356 8.85771L13.6437 14.5489V27.3335L1.04356 21.6423V8.85771ZM26.2438 8.85771L13.6437 14.5489V27.3335L26.2438 21.6423V8.85771Z" 
+                  fill={isLight ? '#7b39fc' : 'white'} 
+                />
+              </svg>
+            </div>
+            <span className={`font-['Manrope'] font-extrabold text-xl tracking-tight ${isLight ? 'text-[#171228]' : 'text-white'}`}>
+              PulseStream
+            </span>
           </a>
+        </div>
 
-          <div className="relative">
-            <button 
-              onClick={() => setServicesDropdown(prev => !prev)}
-              className={`flex items-center gap-1.5 font-['Manrope'] font-medium text-[14px] hover:opacity-80 transition-opacity cursor-pointer ${
-                isLight ? 'text-[#171228]' : 'text-white'
+        {/* Center Column: Floating Glassmorphic Pill Navigation (Mathematically Centered in Screen) */}
+        <div className="hidden lg:flex items-center justify-center flex-shrink-0">
+          <nav className={`flex items-center gap-1 p-1.5 rounded-full border backdrop-blur-2xl shadow-sm transition-all ${
+            isLight
+              ? 'bg-white/80 border-purple-200/70 shadow-purple-900/5 text-neutral-700'
+              : 'bg-[#18122c]/70 border-white/10 shadow-black/40 text-white/85'
+          }`}>
+            <a 
+              href="#home" 
+              className={`px-4 py-1.5 rounded-full text-[13px] font-['Manrope'] font-medium transition-all ${
+                isLight ? 'hover:bg-purple-100/60 hover:text-[#7b39fc]' : 'hover:bg-white/10 hover:text-white'
               }`}
             >
-              Supported Sites
-              <ChevronDown size={15} className={`transition-transform duration-200 ${servicesDropdown ? 'rotate-180' : ''}`} />
-            </button>
+              Home
+            </a>
 
-            {servicesDropdown && (
-              <div className={`absolute top-full left-0 mt-2 w-56 rounded-xl p-2.5 shadow-2xl flex flex-col gap-1 z-30 border backdrop-blur-xl animate-in fade-in ${
-                isLight 
-                  ? 'bg-white/95 border-purple-100 text-[#171228] shadow-purple-900/10' 
-                  : 'bg-[#1f1a32]/95 border-white/10 text-white shadow-black/60'
-              }`}>
-                <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] hover:bg-[#7b39fc]/15 rounded-lg transition-colors flex items-center justify-between">
-                  <span>YouTube 4K & Shorts</span>
-                  <span className="text-[10px] text-[#7b39fc] font-bold">Ultra HD</span>
-                </a>
-                <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] hover:bg-[#7b39fc]/15 rounded-lg transition-colors flex items-center justify-between">
-                  <span>TikTok & Reels</span>
-                  <span className="text-[10px] text-emerald-500 font-bold">No Watermark</span>
-                </a>
-                <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] hover:bg-[#7b39fc]/15 rounded-lg transition-colors flex items-center justify-between">
-                  <span>SoundCloud & Music</span>
-                  <span className="text-[10px] text-amber-500 font-bold">320kbps</span>
-                </a>
-                <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] hover:bg-[#7b39fc]/15 rounded-lg transition-colors">
-                  <span>Twitter / X, Vimeo & 1,000+</span>
-                </a>
-              </div>
-            )}
-          </div>
+            {/* Supported Sites Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setServicesDropdown(prev => !prev)}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13px] font-['Manrope'] font-medium transition-all cursor-pointer ${
+                  servicesDropdown 
+                    ? isLight ? 'bg-purple-100/80 text-[#7b39fc]' : 'bg-white/15 text-white' 
+                    : isLight ? 'hover:bg-purple-100/60 hover:text-[#7b39fc]' : 'hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>Supported Sites</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${servicesDropdown ? 'rotate-180' : ''}`} />
+              </button>
 
-          <a 
-            href="#features" 
-            className={`font-['Manrope'] font-medium text-[14px] hover:opacity-80 transition-opacity ${
-              isLight ? 'text-[#171228]' : 'text-white'
-            }`}
-          >
-            Features
-          </a>
+              {servicesDropdown && (
+                <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 rounded-2xl p-2 shadow-2xl flex flex-col gap-1 z-30 border backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${
+                  isLight 
+                    ? 'bg-white/98 border-purple-100 text-[#171228] shadow-purple-900/15' 
+                    : 'bg-[#18122c]/95 border-white/15 text-white shadow-black/70'
+                }`}>
+                  <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] font-medium hover:bg-[#7b39fc]/15 rounded-xl transition-colors flex items-center justify-between">
+                    <span>YouTube 4K & Shorts</span>
+                    <span className="text-[10px] text-[#7b39fc] font-bold">Ultra HD</span>
+                  </a>
+                  <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] font-medium hover:bg-[#7b39fc]/15 rounded-xl transition-colors flex items-center justify-between">
+                    <span>TikTok & Reels</span>
+                    <span className="text-[10px] text-emerald-500 font-bold">No Watermark</span>
+                  </a>
+                  <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] font-medium hover:bg-[#7b39fc]/15 rounded-xl transition-colors flex items-center justify-between">
+                    <span>SoundCloud & Music</span>
+                    <span className="text-[10px] text-amber-500 font-bold">320kbps</span>
+                  </a>
+                  <a href="#platforms" onClick={() => setServicesDropdown(false)} className="px-3 py-2 text-xs font-['Manrope'] font-medium hover:bg-[#7b39fc]/15 rounded-xl transition-colors">
+                    <span>Twitter / X, Vimeo & 1,000+</span>
+                  </a>
+                </div>
+              )}
+            </div>
 
-          <a 
-            href="#faq" 
-            className={`font-['Manrope'] font-medium text-[14px] hover:opacity-80 transition-opacity ${
-              isLight ? 'text-[#171228]' : 'text-white'
-            }`}
-          >
-            FAQ
-          </a>
-        </nav>
+            <a 
+              href="#features" 
+              className={`px-4 py-1.5 rounded-full text-[13px] font-['Manrope'] font-medium transition-all ${
+                isLight ? 'hover:bg-purple-100/60 hover:text-[#7b39fc]' : 'hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              Features
+            </a>
 
-        {/* Right: Desktop Action Buttons + Theme Toggle */}
-        <div className="hidden md:flex items-center gap-2.5">
-          {/* Light / Dark Mode Toggle */}
+            <a 
+              href="#faq" 
+              className={`px-4 py-1.5 rounded-full text-[13px] font-['Manrope'] font-medium transition-all ${
+                isLight ? 'hover:bg-purple-100/60 hover:text-[#7b39fc]' : 'hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              FAQ
+            </a>
+          </nav>
+        </div>
+
+        {/* Right Column: Refined, Balanced Action Controls (flex-1 to anchor center nav symmetrically) */}
+        <div className="flex-1 flex items-center justify-end gap-2 sm:gap-2.5">
+          {/* Theme Toggle (Circular Glass Switch) */}
           <button
             type="button"
             onClick={toggleTheme}
-            className={`p-2 rounded-full border transition-all cursor-pointer ${
+            className={`w-9 h-9 rounded-full flex items-center justify-center border backdrop-blur-md transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm ${
               isLight
-                ? 'bg-white hover:bg-neutral-100 border-neutral-300 text-amber-500 shadow-sm'
-                : 'bg-white/10 hover:bg-white/20 border-white/20 text-white'
+                ? 'bg-white/90 hover:bg-white border-purple-200/80 text-[#7b39fc] shadow-purple-900/5'
+                : 'bg-white/10 hover:bg-white/15 border-white/15 text-amber-300'
             }`}
             title={isLight ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
             aria-label="Toggle Theme"
           >
-            {isLight ? <Moon size={17} className="text-[#7b39fc]" /> : <Sun size={17} className="text-amber-300" />}
+            {isLight ? <Moon size={16} /> : <Sun size={16} />}
           </button>
 
+          {/* History Button (Compact Glass Pill) */}
           <button 
             type="button"
             onClick={onOpenHistory}
-            className={`rounded-[8px] font-['Manrope'] font-semibold text-[14px] px-3.5 py-2 transition-all cursor-pointer flex items-center gap-1.5 border ${
+            className={`hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-['Manrope'] font-semibold text-xs border backdrop-blur-md transition-all hover:scale-102 active:scale-98 cursor-pointer shadow-sm ${
               isLight 
-                ? 'bg-white hover:bg-neutral-50 text-[#171228] border-neutral-300 shadow-sm' 
-                : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                ? 'bg-white/90 hover:bg-white text-neutral-800 border-purple-200/80 shadow-purple-900/5' 
+                : 'bg-white/10 hover:bg-white/15 text-white/90 border-white/15'
             }`}
             title="Download History"
           >
-            <History size={15} />
+            <History size={14} className="text-[#7b39fc]" />
             <span>History</span>
           </button>
 
+          {/* Settings Button (Compact Glass Pill) */}
           <button 
             type="button"
             onClick={onOpenSettings}
-            className={`rounded-[8px] font-['Manrope'] font-semibold text-[14px] px-3.5 py-2 transition-all cursor-pointer flex items-center gap-1.5 border ${
+            className={`hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full font-['Manrope'] font-semibold text-xs border backdrop-blur-md transition-all hover:scale-102 active:scale-98 cursor-pointer shadow-sm ${
               isLight 
-                ? 'bg-white hover:bg-neutral-50 text-[#171228] border-neutral-300 shadow-sm' 
-                : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                ? 'bg-white/90 hover:bg-white text-neutral-800 border-purple-200/80 shadow-purple-900/5' 
+                : 'bg-white/10 hover:bg-white/15 text-white/90 border-white/15'
             }`}
             title="Stream Engine Settings"
           >
-            <Sliders size={15} />
+            <Sliders size={14} className="text-[#7b39fc]" />
             <span>Settings</span>
           </button>
 
+          {/* Developer Profile Button (Radiant Accent Pill) */}
           <button 
             type="button"
             onClick={onOpenDevInfo}
-            className="bg-[#7b39fc] hover:bg-[#8f52ff] rounded-[8px] text-[#fafafa] font-['Manrope'] font-semibold text-[14px] px-4 py-2 shadow-md shadow-[#7b39fc]/30 transition-all cursor-pointer flex items-center gap-1.5"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-gradient-to-r from-[#7b39fc] via-[#8c4bfb] to-[#a855f7] text-white font-['Manrope'] font-bold text-xs shadow-md shadow-[#7b39fc]/25 hover:shadow-lg hover:shadow-[#7b39fc]/40 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            title="About Anand Choubey"
           >
-            <User size={15} />
+            <User size={14} />
             <span>Developer</span>
           </button>
-        </div>
 
-        {/* Mobile Hamburger & Theme Button */}
-        <div className="flex md:hidden items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className={`p-2 rounded-full border ${
-              isLight ? 'bg-white border-neutral-300 text-[#7b39fc]' : 'bg-white/10 border-white/20 text-amber-300'
-            }`}
-            aria-label="Toggle Theme"
-          >
-            {isLight ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
+          {/* Mobile Hamburger Menu Toggle */}
           <button 
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className={`p-2 hover:opacity-80 transition-opacity cursor-pointer ${isLight ? 'text-[#171228]' : 'text-white'}`}
+            className={`flex lg:hidden p-2 rounded-full border transition-all cursor-pointer ${
+              isLight ? 'bg-white/90 border-purple-200 text-[#171228]' : 'bg-white/10 border-white/15 text-white'
+            }`}
             aria-label="Open menu"
           >
-            <Menu size={26} />
+            <Menu size={20} />
           </button>
         </div>
       </header>
 
       {/* Mobile Full-Screen Overlay Menu */}
       {mobileMenuOpen && (
-        <div className={`fixed inset-0 z-50 flex flex-col justify-between p-6 md:hidden animate-in fade-in duration-200 backdrop-blur-2xl ${
+        <div className={`fixed inset-0 z-50 flex flex-col justify-between p-6 lg:hidden animate-in fade-in duration-200 backdrop-blur-2xl ${
           isLight ? 'bg-white/98 text-[#171228]' : 'bg-black/95 text-white'
         }`}>
           <div className="flex items-center justify-between">
@@ -265,7 +272,7 @@ export default function HeroSection({
             <button 
               type="button"
               onClick={() => { setMobileMenuOpen(false); onOpenSettings(); }}
-              className={`w-full rounded-[8px] font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
+              className={`w-full rounded-2xl font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
                 isLight ? 'bg-neutral-100 text-neutral-800 border-neutral-300' : 'bg-white/10 text-white border-white/20'
               }`}
             >
@@ -275,7 +282,7 @@ export default function HeroSection({
             <button 
               type="button"
               onClick={() => { setMobileMenuOpen(false); onOpenHistory(); }}
-              className={`w-full rounded-[8px] font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
+              className={`w-full rounded-2xl font-['Manrope'] font-semibold text-[15px] py-3 text-center border flex items-center justify-center gap-2 ${
                 isLight ? 'bg-neutral-100 text-neutral-800 border-neutral-300' : 'bg-white/10 text-white border-white/20'
               }`}
             >
@@ -285,7 +292,7 @@ export default function HeroSection({
             <button 
               type="button"
               onClick={() => { setMobileMenuOpen(false); onOpenDevInfo(); }}
-              className="w-full bg-[#7b39fc] rounded-[8px] text-[#fafafa] font-['Manrope'] font-semibold text-[15px] py-3 text-center shadow-lg shadow-[#7b39fc]/30 flex items-center justify-center gap-2"
+              className="w-full bg-[#7b39fc] rounded-2xl text-[#fafafa] font-['Manrope'] font-semibold text-[15px] py-3 text-center shadow-lg shadow-[#7b39fc]/30 flex items-center justify-center gap-2"
             >
               <User size={16} />
               <span>Developer Profile</span>

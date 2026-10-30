@@ -30,8 +30,10 @@ router.get('/diag', async (req, res) => {
     const localBinary = path.join(binPath, 'yt-dlp');
     const command = fs.existsSync(localBinary) ? localBinary : 'yt-dlp';
 
+    const clientName = req.query.client || 'android';
     const testUrl = req.query.url || 'https://youtu.be/zZcV9kDMQzI?si=iHU3etTbcGHSWXUR';
-    const testArgs = ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs', '--dump-json', '--no-playlist', testUrl];
+    const extractorArg = req.query.skip === 'false' ? `youtube:player_client=${clientName}` : `youtube:player_client=${clientName};player_skip=webpage,configs`;
+    const testArgs = ['--extractor-args', extractorArg, '--dump-json', '--no-playlist', testUrl];
 
     const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
     const env = { ...process.env, PATH: fullPath };

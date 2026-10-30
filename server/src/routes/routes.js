@@ -30,10 +30,24 @@ router.get('/diag', async (req, res) => {
     const localBinary = path.join(binPath, 'yt-dlp');
     const command = fs.existsSync(localBinary) ? localBinary : 'yt-dlp';
 
-    const clientName = req.query.client || 'android';
-    const testUrl = req.query.url || 'https://youtu.be/zZcV9kDMQzI?si=iHU3etTbcGHSWXUR';
-    const extractorArg = req.query.skip === 'false' ? `youtube:player_client=${clientName}` : `youtube:player_client=${clientName};player_skip=webpage,configs`;
-    const testArgs = ['--extractor-args', extractorArg, '--dump-json', '--no-playlist', testUrl];
+    const serverDir = path.resolve(__dirname, '../..');
+    const serverFiles = fs.existsSync(serverDir) ? fs.readdirSync(serverDir) : [];
+    const hasCookies = serverFiles.includes('cookies.txt');
+    let cookiesLength = 0;
+    if (hasCookies) {
+      try { cookiesLength = fs.readFileSync(path.join(serverDir, 'cookies.txt'), 'utf8').length; } catch (e) {}
+    }
+
+    res.json({
+      platform: process.platform,
+      serverFiles,
+      hasCookies,
+      cookiesLength,
+      hasEnvCookies: !!process.env.YOUTUBE_COOKIES,
+      envCookiesLength: process.env.YOUTUBE_COOKIES ? process.env.YOUTUBE_COOKIES.length : 0,
+      uptime: process.uptime()
+    });
+    return;
 
     const fullPath = `${binPath}${path.delimiter}${process.env.PATH || ''}`;
     const env = { ...process.env, PATH: fullPath };

@@ -13,7 +13,7 @@ if (fs.existsSync(binPath)) {
   console.log('Prepended local bin to PATH:', binPath);
 }
 
-// Path to cookies file (written from YOUTUBE_COOKIES env var at server startup)
+// Path to cookies file (written from YOUTUBE_COOKIES env var at server startup if present)
 const cookiesPath = path.resolve(__dirname, '../../cookies.txt');
 const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
 
@@ -27,13 +27,12 @@ function getMetadata(url) {
       return reject({ code: ERROR_CODES.INVALID_URL, message: 'URL is required' });
     }
 
-    // Run yt-dlp --dump-json --no-playlist
-    // android+mweb clients use the internal Google API path which doesn't require cookies.
-    // Passing stale/rotated cookies makes bot detection WORSE, so we omit them entirely.
-    const cmd = `yt-dlp --js-runtimes node --extractor-args "youtube:player_client=android,mweb" --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
+    const isWin = process.platform === 'win32';
+    const ytCmd = isWin ? 'python -m yt_dlp' : 'yt-dlp';
+    const cmd = `${ytCmd} --js-runtimes node --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
     
-    // Increase maxBuffer to 15MB to handle very large metadata JSONs
-    exec(cmd, { maxBuffer: 15 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // Increase maxBuffer to 25MB to handle very large metadata JSONs
+    exec(cmd, { maxBuffer: 25 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         console.error('yt-dlp metadata error:', stderr || error.message);
         
@@ -69,39 +68,84 @@ function parseMetadata(data, url) {
   const duration = data.duration || 0;
   const rawFormats = data.formats || [];
   
-  const videoFormats = [];
+  const videoFormatsMap = new Map();
   const audioFormats = [];
 
   rawFormats.forEach(f => {
     const isVideo = f.vcodec && f.vcodec !== 'none';
     const isAudio = f.acodec && f.acodec !== 'none';
     
+    // Skip storyboards, thumbnails, and mhtml manifest formats
+    if (f.ext === 'mhtml' || f.format_note === 'storyboard' || f.format_id?.startsWith('sb')) {
+      return;
+    }
+
     // Estimate size if missing
     let size = f.filesize || f.filesize_approx || null;
     if (!size && f.tbr && duration) {
-      // tbr is in kbps. size = tbr * 1000 * duration / 8
       size = Math.round((f.tbr * 1000 * duration) / 8);
     }
 
     const note = f.format_note || f.format || '';
     
     if (isVideo) {
-      // Video format
-      const resolution = f.height ? `${f.height}p` : 'Unknown';
+      // Exclude YouTube Premium bitrates which fail without authenticated subscription cookies
+      if (note.toLowerCase().includes('premium')) return;
+
+      // Detect standard resolution label
+      let resolution = '';
+      if (/^\d+p$/i.test(note)) {
+        resolution = note.toLowerCase();
+      } else if (f.height >= 2160 || f.width >= 3840) {
+        resolution = '4k';
+      } else if (f.height >= 1440 || f.width >= 2560) {
+        resolution = '1440p';
+      } else if (f.height >= 800 || f.width >= 1920) {
+        resolution = '1080p';
+      } else if (f.height >= 540 || f.width >= 1280) {
+        resolution = '720p';
+      } else if (f.height >= 400 || f.width >= 854) {
+        resolution = '480p';
+      } else if (f.height >= 260 || f.width >= 640) {
+        resolution = '360p';
+      } else if (f.height >= 180 || f.width >= 426) {
+        resolution = '240p';
+      } else if (f.height) {
+        resolution = `${f.height}p`;
+      } else {
+        resolution = 'Unknown';
+      }
+
       const fps = f.fps ? `${f.fps}fps` : '';
-      
-      videoFormats.push({
+      const ext = f.ext || 'mp4';
+      const vcodec = f.vcodec || '';
+
+      // Score this format: prefer MP4 container, H.264 (avc1), and higher bitrate
+      let score = 0;
+      if (ext === 'mp4') score += 100;
+      if (vcodec.includes('avc') || vcodec.includes('h264')) score += 50;
+      if (isAudio) score += 20; // Pre-muxed format bonus
+      score += (f.tbr || 0);
+
+      const item = {
         formatId: f.format_id,
         resolution,
         height: f.height || 0,
+        width: f.width || 0,
         fps: f.fps || null,
-        ext: f.ext,
-        vcodec: f.vcodec,
+        ext,
+        vcodec,
         acodec: f.acodec,
         size,
         hasAudio: isAudio,
-        note: `${resolution}${fps ? ` ${fps}` : ''} (${f.ext}) ${note}`.trim()
-      });
+        note: `${resolution.toUpperCase()}${fps ? ` ${fps}` : ''} (${ext.toUpperCase()})`.trim(),
+        score
+      };
+
+      // Keep the best format per resolution in the map
+      if (!videoFormatsMap.has(resolution) || score > videoFormatsMap.get(resolution).score) {
+        videoFormatsMap.set(resolution, item);
+      }
     } else if (isAudio) {
       // Audio-only format
       const bitrate = f.abr ? `${Math.round(f.abr)}kbps` : (f.tbr ? `${Math.round(f.tbr)}kbps` : 'Unknown');
@@ -117,11 +161,15 @@ function parseMetadata(data, url) {
     }
   });
 
-  // Sort video formats: height (descending), fps (descending), size (descending)
-  videoFormats.sort((a, b) => {
-    if (b.height !== a.height) return b.height - a.height;
-    if (b.fps !== a.fps) return (b.fps || 0) - (a.fps || 0);
-    return (b.size || 0) - (a.size || 0);
+  // Sort video formats in descending standard order
+  const standardOrder = ['4k', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'];
+  const videoFormats = Array.from(videoFormatsMap.values()).sort((a, b) => {
+    const idxA = standardOrder.indexOf(a.resolution);
+    const idxB = standardOrder.indexOf(b.resolution);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return b.height - a.height;
   });
 
   // Sort audio formats: size / bitrate (descending)
@@ -150,7 +198,6 @@ function parseMetadata(data, url) {
   // Get best available thumbnail
   let thumbnail = data.thumbnail || '';
   if (data.thumbnails && data.thumbnails.length > 0) {
-    // Find thumbnail with highest height/width or just the last one
     const sortedThumbnails = [...data.thumbnails].sort((a, b) => (b.width || 0) - (a.width || 0));
     thumbnail = sortedThumbnails[0].url || thumbnail;
   }
@@ -184,10 +231,11 @@ function startDownload(jobId, url, formatId, type) {
   const outputTemplate = path.join(config.DOWNLOAD_DIR, `${jobId}.%(ext)s`);
   const args = [];
 
-  // android+mweb: internal Google API, no cookies needed.
-  // Passing stale cookies triggers more YouTube suspicion than no cookies.
   args.push('--js-runtimes', 'node');
-  args.push('--extractor-args', 'youtube:player_client=android,mweb');
+  args.push('--newline');
+  if (fs.existsSync(binPath)) {
+    args.push('--ffmpeg-location', binPath);
+  }
 
   // Construct arguments
   if (type === 'audio') {
@@ -209,10 +257,8 @@ function startDownload(jobId, url, formatId, type) {
       );
     }
   } else {
-    // Video type.
-    // If format is a standard ID, check if it has audio.
-    // High-resolution formats (e.g. YouTube 1080p/4K) require merging.
-    // We specify: format_id+bestaudio. yt-dlp will automatically merge them using ffmpeg.
+    // Video type: high-resolution formats (e.g. YouTube 720p/1080p/4K) require audio merging.
+    // Specifying format_id+bestaudio merges the pristine video stream with the best audio track via ffmpeg.
     args.push(
       '-f', `${formatId}+bestaudio/best`,
       '--merge-output-format', 'mp4',
@@ -221,8 +267,6 @@ function startDownload(jobId, url, formatId, type) {
     );
   }
 
-  // Spawn yt-dlp process
-  console.log(`Spawning yt-dlp with args: ${args.join(' ')}`);
   // Spawn yt-dlp process across Windows and Linux
   const isWin = process.platform === 'win32';
   const spawnCmd = isWin ? 'python' : 'yt-dlp';
@@ -247,15 +291,14 @@ function startDownload(jobId, url, formatId, type) {
   }
 
   // Parse progress output
-  // Example stdout line: [download]  12.5% of  10.00MiB at  1.50MiB/s ETA 00:05
-  // Example merging line: [Merger] Merging formats into "..."
   const progressRegex = /\[download\]\s+([0-9.]+)%\s+of\s+(?:~)?([0-9.a-zA-Z]+)\s+at\s+([0-9.a-zA-Z/]+)\s+ETA\s+([0-9:]+)/;
   
   child.stdout.on('data', (data) => {
-    const lines = data.toString().split('\n');
+    const lines = data.toString().split(/[\r\n]+/);
     for (const line of lines) {
+      if (!line.trim()) continue;
       // Check for merger
-      if (line.includes('[Merger]') || line.includes('[ffmpeg]')) {
+      if (line.includes('[Merger]') || line.includes('[ffmpeg]') || line.includes('Merging formats')) {
         jobsService.updateJob(jobId, {
           status: JOB_STATUS.MERGING,
           progress: 99,
@@ -287,7 +330,6 @@ function startDownload(jobId, url, formatId, type) {
   child.stderr.on('data', (data) => {
     const line = data.toString();
     console.warn(`yt-dlp stderr [${jobId}]:`, line);
-    // Some warnings are non-fatal, but we can log them
   });
 
   child.on('close', (code) => {

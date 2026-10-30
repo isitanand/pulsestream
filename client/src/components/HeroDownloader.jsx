@@ -71,7 +71,11 @@ export default function HeroDownloader({
           if (preferences.defaultQuality === 'best') {
             selected = formatsList[0];
           } else {
-            const match = formatsList.find(f => f.resolution?.includes(preferences.defaultQuality));
+            const match = formatsList.find(f => 
+              f.resolution?.toLowerCase() === preferences.defaultQuality.toLowerCase() ||
+              f.resolution?.toLowerCase().includes(preferences.defaultQuality.toLowerCase()) ||
+              f.note?.toLowerCase().includes(preferences.defaultQuality.toLowerCase())
+            );
             if (match) selected = match;
           }
         } else if (defaultType === 'audio' && preferences?.audioQuality) {
@@ -206,7 +210,16 @@ export default function HeroDownloader({
     setActiveTab(tab);
     const formatsList = tab === 'video' ? metadata?.formats?.video : metadata?.formats?.audio;
     if (formatsList && formatsList.length > 0) {
-      setSelectedFormat(formatsList[0]);
+      let selected = formatsList[0];
+      if (tab === 'video' && preferences?.defaultQuality && preferences.defaultQuality !== 'best') {
+        const match = formatsList.find(f => 
+          f.resolution?.toLowerCase() === preferences.defaultQuality.toLowerCase() ||
+          f.resolution?.toLowerCase().includes(preferences.defaultQuality.toLowerCase()) ||
+          f.note?.toLowerCase().includes(preferences.defaultQuality.toLowerCase())
+        );
+        if (match) selected = match;
+      }
+      setSelectedFormat(selected);
     } else {
       setSelectedFormat(null);
     }

@@ -21,7 +21,7 @@ if (fs.existsSync(binPath)) {
 
 // Ensure execution permissions on Linux for local binaries
 if (process.platform !== 'win32' && fs.existsSync(binPath)) {
-  ['yt-dlp', 'ffmpeg', 'ffprobe'].forEach(binary => {
+  ['yt-dlp', 'ffmpeg', 'ffprobe', 'deno'].forEach(binary => {
     const filePath = path.join(binPath, binary);
     if (fs.existsSync(filePath)) {
       try {
@@ -62,7 +62,9 @@ function getMetadata(url) {
     }
 
     const ytCmd = getYtDlpCommand();
-    const cmd = `${ytCmd} ${cookiesFlag} --extractor-args "youtube:player_client=tv_embedded" --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
+    const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
+    const extractorArgs = (isYouTube && !cookiesFlag) ? '--extractor-args "youtube:player_client=android"' : '';
+    const cmd = `${ytCmd} ${cookiesFlag} ${extractorArgs} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
     const env = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
 
     console.log(`Executing metadata command: ${cmd}`);
@@ -277,7 +279,10 @@ function startDownload(jobId, url, formatId, type) {
   const args = [];
 
   args.push('--newline');
-  args.push('--extractor-args', 'youtube:player_client=tv_embedded');
+  const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
+  if (isYouTube && !cookiesFlag) {
+    args.push('--extractor-args', 'youtube:player_client=android');
+  }
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);
   }

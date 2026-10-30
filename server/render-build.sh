@@ -38,14 +38,21 @@ cp ffmpeg-*/bin/ffmpeg bin/ffmpeg
 cp ffmpeg-*/bin/ffprobe bin/ffprobe
 chmod +x bin/ffmpeg bin/ffprobe
 
-# Clean up
-echo "Cleaning up temporary tarball and extraction directory..."
+# Clean up temporary tarball
 rm -rf ffmpeg.tar.xz ffmpeg-*
+
+# 5. Download Deno standalone binary (official JS runtime required by modern yt-dlp for signature decoding)
+echo "Downloading Deno JavaScript runtime..."
+curl -fL --retry 3 https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip -o deno.zip
+unzip -o deno.zip -d bin/
+chmod +x bin/deno
+rm -f deno.zip
 
 echo "Verifying local binaries in bin/:"
 ls -lh bin/
 
-echo "Testing yt-dlp executable:"
+echo "Testing binaries:"
 bin/yt-dlp --version || true
+bin/deno --version || true
 
 echo "=== Render Server Build Complete ==="

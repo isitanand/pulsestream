@@ -99,11 +99,10 @@ function runYtDlpMetadata(url, extraArgs = [], useCookies = true) {
       baseArgs = [];
     }
 
-    // High performance flags: suppress verbose warnings, skip update check & certificate CRL roundtrips
+    // High performance flags: suppress verbose warnings and certificate CRL roundtrips
     const args = [
       ...baseArgs,
       '--no-warnings',
-      '--no-call-home',
       '--no-check-certificates'
     ];
     const cookiesFile = getCookiesPath();
@@ -162,9 +161,15 @@ async function getMetadata(url) {
   if (cookiesFile) {
     try {
       console.log('Fast path: Running direct authenticated extraction with cookies...');
-      result = await runYtDlpMetadata(url, [], true);
+      const extra = isYouTube ? ['--extractor-args', 'youtube:player_skip=configs'] : [];
+      result = await runYtDlpMetadata(url, extra, true);
     } catch (errCookies) {
-      console.warn('Fast path with cookies failed, falling back to bypass:', errCookies.stderr || errCookies.message);
+      console.warn('Fast path with cookies failed, falling back to standard extraction:', errCookies.stderr || errCookies.message);
+      try {
+        result = await runYtDlpMetadata(url, [], true);
+      } catch (e) {
+        console.warn('Standard extraction with cookies failed:', e.stderr || e.message);
+      }
     }
   }
 
@@ -390,7 +395,6 @@ function startDownload(jobId, url, formatId, type) {
   args.push(
     '--newline',
     '--no-warnings',
-    '--no-call-home',
     '--no-check-certificates',
     '--concurrent-fragments', '4'
   );

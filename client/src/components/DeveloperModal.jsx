@@ -117,3 +117,4 @@ export default function DeveloperModal({ isOpen, onClose, theme }) {
     </div>
   );
 }
+

@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="./banner.svg" alt="CloudClip Banner" width="100%">
+  <img src="./banner.svg" alt="PulseStream Banner" width="100%">
 </p>
 
 <p align="center">
-  <img src="./tech_stack.svg" alt="CloudClip Tech Stack" width="100%">
+  <img src="./tech_stack.svg" alt="PulseStream Tech Stack" width="100%">
 </p>
 
 ---
@@ -22,7 +22,7 @@
 ## 📂 Project Structure
 
 ```
-CloudClip/
+PulseStream/
 ├── client/                 # React frontend (Vite environment)
 │   ├── src/
 │   │   ├── components/     # Layout buttons & components

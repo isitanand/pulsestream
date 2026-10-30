@@ -60,7 +60,7 @@ export default function HeroSection({
             />
           </svg>
           <span className={`font-['Manrope'] font-extrabold text-xl tracking-tight ${isLight ? 'text-[#171228]' : 'text-white'}`}>
-            CloudClip
+            PulseStream
           </span>
         </a>
 
@@ -203,7 +203,7 @@ export default function HeroSection({
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M1.04356 6.35771L13.6437 0.666504L26.2438 6.35771L13.6437 12.0489L1.04356 6.35771ZM1.04356 8.85771L13.6437 14.5489V27.3335L1.04356 21.6423V8.85771ZM26.2438 8.85771L13.6437 14.5489V27.3335L26.2438 21.6423V8.85771Z" fill="#7b39fc" />
               </svg>
-              <span className="font-['Manrope'] font-bold text-lg">CloudClip</span>
+              <span className="font-['Manrope'] font-bold text-lg">PulseStream</span>
             </div>
             <button 
               onClick={() => setMobileMenuOpen(false)}
@@ -278,7 +278,7 @@ export default function HeroSection({
             New
           </span>
           <span className={`font-['Cabin'] font-medium text-[14px] ${isLight ? 'text-purple-950 font-semibold' : 'text-white'}`}>
-            Say Hello to CloudClip Ultra v3.2
+            Say Hello to PulseStream Ultra v3.2
           </span>
         </div>
 

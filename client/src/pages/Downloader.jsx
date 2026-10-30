@@ -210,7 +210,7 @@ export default function Downloader({ addHistory, showNotification, preferences }
     <div className="downloader-page">
       {/* Search Header */}
       <div className="hero">
-        <h1>CloudClip <span>Media Downloader</span></h1>
+        <h1>PulseStream <span>Media Downloader</span></h1>
         <p>Convert and download videos or audios from YouTube, Vimeo, SoundCloud, TikTok, and more instantly.</p>
       </div>
 

@@ -3,6 +3,11 @@ const router = express.Router();
 const downloadController = require('../controllers/downloadController');
 const { validateUrl, rateLimiter } = require('../middleware/security');
 
+// Health check endpoint (exempt from rate limiting for keep-alive pings)
+router.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: Date.now() });
+});
+
 // Apply rate limiter to all routes
 router.use(rateLimiter);
 

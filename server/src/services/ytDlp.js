@@ -51,40 +51,17 @@ function getYtDlpCommand() {
 const cookiesPath = path.resolve(__dirname, '../../cookies.txt');
 const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
 
-/**
- * Fetch media metadata using yt-dlp -J.
- */
-function getMetadata(url) {
+function runYtDlpMetadata(url, extraArgs = '') {
   return new Promise((resolve, reject) => {
-    // Check url validity
-    if (!url) {
-      return reject({ code: ERROR_CODES.INVALID_URL, message: 'URL is required' });
-    }
-
     const ytCmd = getYtDlpCommand();
-    const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
-    const extractorArgs = (isYouTube && !cookiesFlag) ? '--extractor-args "youtube:player_client=android"' : '';
-    const cmd = `${ytCmd} ${cookiesFlag} ${extractorArgs} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
+    const cmd = `${ytCmd} ${cookiesFlag} ${extraArgs} --dump-json --no-playlist "${url.replace(/"/g, '\\"')}"`;
     const env = { ...process.env, PATH: `${binPath}${path.delimiter}${process.env.PATH || ''}` };
 
     console.log(`Executing metadata command: ${cmd}`);
 
-    // Increase maxBuffer to 25MB to handle very large metadata JSONs
     exec(cmd, { maxBuffer: 25 * 1024 * 1024, env }, (error, stdout, stderr) => {
       if (error) {
-        console.error('yt-dlp metadata error:', stderr || error.message);
-        
-        let errorCode = ERROR_CODES.METADATA_FAILED;
-        let errorMessage = 'Failed to extract metadata from the provided URL';
-        
-        if (stderr && (stderr.includes('Unsupported URL') || stderr.includes('not a valid URL'))) {
-          errorCode = ERROR_CODES.UNSUPPORTED_SITE;
-          errorMessage = 'The provided website or URL is not supported by the downloader';
-        } else if (stderr && (stderr.includes('Sign in to confirm your age') || stderr.includes('Sign in to confirm you’re not a bot'))) {
-          errorMessage = 'This video requires authentication or is restricted by the platform';
-        }
-        
-        return reject({ code: errorCode, message: errorMessage, details: stderr || error.message });
+        return reject({ error, stderr: stderr || error.message });
       }
 
       try {
@@ -92,11 +69,61 @@ function getMetadata(url) {
         const parsed = parseMetadata(data, url);
         resolve(parsed);
       } catch (e) {
-        console.error('Failed to parse metadata JSON:', e);
-        reject({ code: ERROR_CODES.SERVER_ERROR, message: 'Failed to process metadata response', details: e.message });
+        reject({ error: e, stderr: 'Failed to parse JSON output: ' + e.message });
       }
     });
   });
+}
+
+/**
+ * Fetch media metadata using yt-dlp -J with resilient cloud bypass fallback.
+ */
+async function getMetadata(url) {
+  if (!url) {
+    throw { code: ERROR_CODES.INVALID_URL, message: 'URL is required' };
+  }
+
+  const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
+
+  // Strategy 1: If on cloud datacenter without cookies, use android player with webpage bypass to avoid 429
+  if (isYouTube && !cookiesFlag) {
+    try {
+      console.log('Attempting YouTube extraction via Android Innertube bypass...');
+      return await runYtDlpMetadata(url, '--extractor-args "youtube:player_client=android;player_skip=webpage,configs"');
+    } catch (err1) {
+      console.warn('Android bypass initial attempt error, falling back:', err1.stderr || err1.message);
+    }
+  }
+
+  // Strategy 2: Standard extraction (or authenticated extraction if cookiesFlag is set)
+  try {
+    return await runYtDlpMetadata(url);
+  } catch (err2) {
+    const stderr = err2.stderr || '';
+    console.error('Standard extraction error:', stderr);
+
+    // Strategy 3: Final fallback to Android bypass if it was skipped or failed
+    if (isYouTube) {
+      try {
+        console.log('Falling back to Android Innertube bypass (final attempt)...');
+        return await runYtDlpMetadata(url, '--extractor-args "youtube:player_client=android;player_skip=webpage,configs"');
+      } catch (err3) {
+        console.error('All YouTube extraction strategies failed:', err3.stderr);
+      }
+    }
+
+    let errorCode = ERROR_CODES.METADATA_FAILED;
+    let errorMessage = 'Failed to extract metadata from the provided URL';
+
+    if (stderr.includes('Unsupported URL') || stderr.includes('not a valid URL')) {
+      errorCode = ERROR_CODES.UNSUPPORTED_SITE;
+      errorMessage = 'The provided website or URL is not supported by the downloader';
+    } else if (stderr.includes('Sign in to confirm your age') || stderr.includes('Sign in to confirm you’re not a bot')) {
+      errorMessage = 'This video requires authentication or is restricted by the platform';
+    }
+
+    throw { code: errorCode, message: errorMessage, details: stderr };
+  }
 }
 
 /**
@@ -281,7 +308,7 @@ function startDownload(jobId, url, formatId, type) {
   args.push('--newline');
   const isYouTube = url.includes('youtu.be') || url.includes('youtube.com');
   if (isYouTube && !cookiesFlag) {
-    args.push('--extractor-args', 'youtube:player_client=android');
+    args.push('--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs');
   }
   if (fs.existsSync(binPath)) {
     args.push('--ffmpeg-location', binPath);

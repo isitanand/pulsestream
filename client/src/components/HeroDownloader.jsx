@@ -8,8 +8,14 @@ import * as api from '../services/api';
 import constants from '../../../shared/constants/constants.json';
 const { JOB_STATUS } = constants;
 
-const formatDuration = (sec) => {
-  if (!sec) return '0:00';
+const formatDuration = (val) => {
+  if (!val) return '0:00';
+  // If already formatted like "36:12" or "1:02:15", return as-is
+  if (typeof val === 'string' && val.includes(':')) {
+    return val;
+  }
+  const sec = Number(val);
+  if (isNaN(sec) || sec <= 0) return '0:00';
   const hrs = Math.floor(sec / 3600);
   const mins = Math.floor((sec % 3600) / 60);
   const secs = Math.floor(sec % 60);
@@ -338,8 +344,12 @@ export default function HeroDownloader({
               </h3>
               <p className={`text-xs mt-1 font-['Inter'] flex items-center gap-2 ${isLight ? 'text-neutral-500' : 'text-white/50'}`}>
                 <span>By {metadata.uploader || 'Creator'}</span>
-                <span>•</span>
-                <span>{metadata.extractor}</span>
+                {metadata.extractor && (
+                  <>
+                    <span>•</span>
+                    <span className="capitalize">{metadata.extractor}</span>
+                  </>
+                )}
               </p>
 
               {/* Format Tabs (Video vs Audio) + Quick Settings Link */}

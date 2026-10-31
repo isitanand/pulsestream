@@ -9,8 +9,11 @@ import constants from '../../../shared/constants/constants.json';
 const { JOB_STATUS } = constants;
 
 // Format duration from seconds (e.g. 135 -> 2:15)
-const formatDuration = (sec) => {
-  if (!sec) return '0:00';
+const formatDuration = (val) => {
+  if (!val) return '0:00';
+  if (typeof val === 'string' && val.includes(':')) return val;
+  const sec = Number(val);
+  if (isNaN(sec) || sec <= 0) return '0:00';
   const hrs = Math.floor(sec / 3600);
   const mins = Math.floor((sec % 3600) / 60);
   const secs = Math.floor(sec % 60);

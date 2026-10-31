@@ -391,6 +391,7 @@ function parseMetadata(data, url) {
     url,
     title: data.title || 'Untitled Media',
     uploader: data.uploader || data.channel || data.artist || 'Unknown Creator',
+    extractor: data.extractor_key || data.extractor || 'YouTube',
     duration: durationFormatted,
     durationSeconds: duration,
     thumbnail,

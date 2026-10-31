@@ -29,6 +29,13 @@ cp ffmpeg-*-amd64-static/ffmpeg server/bin/
 cp ffmpeg-*-amd64-static/ffprobe server/bin/
 chmod +x server/bin/ffmpeg server/bin/ffprobe
 
+# 5. Download Deno (for yt-dlp PO token / JavaScript challenge resolution)
+echo "Downloading Deno runtime for BotGuard / PO token execution..."
+curl -fsSL https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip -o deno.zip
+unzip -o deno.zip -d server/bin
+chmod +x server/bin/deno
+rm -f deno.zip
+
 # Clean up
 echo "Cleaning up temporary files..."
 rm -rf ffmpeg.tar.xz ffmpeg-*-amd64-static

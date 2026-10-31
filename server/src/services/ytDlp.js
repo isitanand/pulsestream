@@ -146,7 +146,7 @@ async function getMetadata(url) {
     throw { code: ERROR_CODES.INVALID_URL, message: 'URL is required' };
   }
 
-  // 1. Instant Cache Check (sub-10ms response if previously queried)
+  // 1. Instant Cache Check (sub-10ms 0.00s response if previously queried)
   const cached = getCachedMetadata(url);
   if (cached) {
     return cached;
@@ -157,48 +157,67 @@ async function getMetadata(url) {
 
   let result = null;
 
-  // Fast Path 1: If cookies exist, perform direct authenticated extraction (2.0 - 3.0s)
-  if (cookiesFile) {
-    try {
-      console.log('Fast path: Running direct authenticated extraction with cookies...');
-      const extra = isYouTube ? ['--extractor-args', 'youtube:player_skip=configs'] : [];
-      result = await runYtDlpMetadata(url, extra, true);
-    } catch (errCookies) {
-      console.warn('Fast path with cookies failed, falling back to standard extraction:', errCookies.stderr || errCookies.message);
+  if (isYouTube) {
+    if (cookiesFile) {
       try {
-        result = await runYtDlpMetadata(url, [], true);
-      } catch (e) {
-        console.warn('Standard extraction with cookies failed:', e.stderr || e.message);
+        console.log('Fast path: Direct YouTube authenticated extraction (2.0s - 3.0s)...');
+        result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_skip=configs'], true);
+      } catch (errCookies) {
+        const stderr = errCookies.stderr || errCookies.message || '';
+        console.warn('Fast path with cookies failed:', stderr);
+
+        // If cookies are rotated/expired or bot-challenged, fail fast with an actionable message
+        if (stderr.includes('Sign in to confirm you’re not a bot') || stderr.includes('no longer valid') || stderr.includes('HTTP Error 429')) {
+          throw {
+            code: ERROR_CODES.METADATA_FAILED,
+            message: 'Your YouTube session has expired or requires re-authentication. Please export cookies from a fresh, dedicated browser profile and paste them in Render.',
+            details: stderr
+          };
+        }
+
+        // Try one fast fallback with Android client
+        try {
+          console.log('Falling back to Android Innertube bypass...');
+          result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs'], false);
+        } catch (errAndroid) {
+          throw {
+            code: ERROR_CODES.METADATA_FAILED,
+            message: 'YouTube extraction failed: ' + (errAndroid.stderr || errAndroid.message),
+            details: errAndroid.stderr
+          };
+        }
+      }
+    } else {
+      // No cookies file present: attempt Android Innertube bypass once
+      try {
+        console.log('No cookies file: Attempting YouTube extraction via Android client...');
+        result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs'], false);
+      } catch (errAndroid) {
+        const stderr = errAndroid.stderr || errAndroid.message || '';
+        throw {
+          code: ERROR_CODES.METADATA_FAILED,
+          message: stderr.includes('Sign in to confirm you’re not a bot')
+            ? 'YouTube requires authentication on cloud servers. Please add your YOUTUBE_COOKIES in the Render Dashboard.'
+            : 'YouTube extraction failed: ' + stderr,
+          details: stderr
+        };
       }
     }
-  }
-
-  // Fast Path 2: If no cookies or if Strategy 1 failed, try Android Innertube bypass
-  if (!result && isYouTube) {
+  } else {
+    // Non-YouTube platforms (SoundCloud, Vimeo, TikTok, Instagram, Twitter/X, etc.)
     try {
-      console.log('Attempting YouTube extraction via Android Innertube bypass...');
-      result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_client=android;player_skip=webpage,configs'], false);
-    } catch (errAndroid) {
-      console.warn('Android bypass failed, falling back to web_embedded:', errAndroid.stderr || errAndroid.message);
-    }
-  }
-
-  // Fast Path 3: For non-YouTube platforms (SoundCloud, Vimeo, TikTok, etc.) or ultimate fallback
-  if (!result) {
-    try {
-      result = await runYtDlpMetadata(url, [], !!cookiesFile);
+      console.log('Direct extraction for non-YouTube media...');
+      result = await runYtDlpMetadata(url, [], false);
     } catch (errFinal) {
       const stderr = errFinal.stderr || '';
-      console.error('Extraction error:', stderr);
+      console.error('Non-YouTube extraction error:', stderr);
 
       let errorCode = ERROR_CODES.METADATA_FAILED;
-      let errorMessage = 'Failed to extract metadata from the provided URL';
+      let errorMessage = 'Failed to extract media from this URL';
 
       if (stderr.includes('Unsupported URL') || stderr.includes('not a valid URL')) {
         errorCode = ERROR_CODES.UNSUPPORTED_SITE;
-        errorMessage = 'The provided website or URL is not supported by the downloader';
-      } else if (stderr.includes('Sign in to confirm your age') || stderr.includes('Sign in to confirm you’re not a bot')) {
-        errorMessage = 'This video requires authentication or is restricted by the platform. Please verify your YouTube cookies configuration on Render.';
+        errorMessage = 'The provided website or URL is not supported by PulseStream';
       }
 
       throw { code: errorCode, message: errorMessage, details: stderr };

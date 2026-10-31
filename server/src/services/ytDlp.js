@@ -84,7 +84,7 @@ function runYtDlpMetadata(url, extraArgs = [], useCookies = true) {
   return new Promise((resolve, reject) => {
     const isWin = process.platform === 'win32';
     const localBinary = path.join(binPath, 'yt-dlp');
-    
+
     let command;
     let baseArgs;
 
@@ -160,8 +160,8 @@ async function getMetadata(url) {
   if (isYouTube) {
     if (cookiesFile) {
       try {
-        console.log('Fast path: Direct YouTube authenticated extraction (2.0s - 3.0s)...');
-        result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_skip=configs'], true);
+        console.log('Fast path: Direct YouTube authenticated extraction with skip webpage,configs...');
+        result = await runYtDlpMetadata(url, ['--extractor-args', 'youtube:player_skip=webpage,configs'], true);
       } catch (errCookies) {
         const stderr = errCookies.stderr || errCookies.message || '';
         console.warn('Fast path with cookies failed:', stderr);
@@ -238,14 +238,14 @@ async function getMetadata(url) {
 function parseMetadata(data, url) {
   const duration = data.duration || 0;
   const rawFormats = data.formats || [];
-  
+
   const videoFormatsMap = new Map();
   const audioFormats = [];
 
   rawFormats.forEach(f => {
     const isVideo = f.vcodec && f.vcodec !== 'none';
     const isAudio = f.acodec && f.acodec !== 'none';
-    
+
     // Skip storyboards, thumbnails, and mhtml manifest formats
     if (f.ext === 'mhtml' || f.format_note === 'storyboard' || f.format_id?.startsWith('sb')) {
       return;
@@ -258,7 +258,7 @@ function parseMetadata(data, url) {
     }
 
     const note = f.format_note || f.format || '';
-    
+
     if (isVideo) {
       // Exclude YouTube Premium bitrates which fail without authenticated subscription cookies
       if (note.toLowerCase().includes('premium')) return;
@@ -320,7 +320,7 @@ function parseMetadata(data, url) {
     } else if (isAudio) {
       // Audio-only format
       const bitrate = f.abr ? `${Math.round(f.abr)}kbps` : (f.tbr ? `${Math.round(f.tbr)}kbps` : 'Unknown');
-      
+
       audioFormats.push({
         formatId: f.format_id,
         ext: f.ext,
@@ -498,12 +498,12 @@ function startDownload(jobId, url, formatId, type) {
 
   // Parse progress output
   const progressRegex = /\[download\]\s+([0-9.]+)%\s+of\s+(?:~)?([0-9.a-zA-Z]+)\s+at\s+([0-9.a-zA-Z/]+)\s+ETA\s+([0-9:]+)/;
-  
+
   child.stdout.on('data', (data) => {
     const lines = data.toString().split(/[\r\n]+/);
     for (const line of lines) {
       if (!line.trim()) continue;
-      
+
       // Check for merger stage
       if (line.includes('[Merger]') || line.includes('Merging formats into')) {
         jobsService.updateJob(jobId, {
@@ -542,7 +542,7 @@ function startDownload(jobId, url, formatId, type) {
 
   child.on('close', (code) => {
     console.log(`yt-dlp process closed with code ${code} for job ${jobId}`);
-    
+
     if (code === 0) {
       // Find the generated output file matching outputTemplate base
       try {

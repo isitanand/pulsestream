@@ -13,9 +13,9 @@ npm run install:server
 echo "Creating local bin directory..."
 mkdir -p server/bin
 
-# 3. Download yt-dlp binary
-echo "Downloading yt-dlp..."
-curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o server/bin/yt-dlp
+# 3. Download yt-dlp Python zipapp (avoids PyInstaller /tmp extraction overhead on 0.1 vCPU)
+echo "Downloading yt-dlp zipapp..."
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o server/bin/yt-dlp
 chmod +x server/bin/yt-dlp
 
 # 4. Download static ffmpeg / ffprobe binaries
